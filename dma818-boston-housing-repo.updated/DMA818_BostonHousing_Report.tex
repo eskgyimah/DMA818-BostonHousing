@@ -1,0 +1,47 @@
+
+\documentclass[11pt,a4paper]{article}
+\usepackage{graphicx}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+\title{DMA818 --- Boston Housing Analysis}
+\author{Edward Solomon Kweku Gyimah (SE/DAT/24/0007)}
+\date{2025-09-01}
+\begin{document}
+\begin{center}
+\includegraphics[width=3cm]{UCC_Logo.png}\\
+\end{center}
+\maketitle
+
+\section*{Executive Summary}
+We analyze the Boston Housing dataset (506 $\times$ 14).
+Linear Regression achieved RMSE=4.773, $R^2$=0.689.
+Logistic Regression achieved Accuracy=0.961.
+
+\section*{Figures}
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\textwidth]{dma818_report_assets/corr_heatmap.png}
+\caption{Correlation Heatmap}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.48\textwidth]{dma818_report_assets/medv_hist.png}
+\includegraphics[width=0.48\textwidth]{dma818_report_assets/rm_vs_medv.png}
+\caption{Distribution and RM vs MEDV}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.48\textwidth]{dma818_report_assets/lstat_vs_medv.png}
+\includegraphics[width=0.48\textwidth]{dma818_report_assets/residuals.png}
+\caption{LSTAT vs MEDV and Residuals}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.5\textwidth]{dma818_report_assets/confusion_matrix.png}
+\caption{Confusion Matrix}
+\end{figure}
+
+\end{document}

@@ -1,0 +1,39 @@
+---
+title: "DMA818 — Boston Housing Analysis"
+author: "Edward Solomon Kweku Gyimah (SE/DAT/24/0007)"
+date: 2025-09-01
+format:
+  html: default
+  pdf: default
+---
+
+![](UCC_Logo.png){width=120px}
+
+## Executive Summary
+
+This report analyzes the Boston Housing dataset (506 × 14). We build:
+- A linear regression model to predict **MEDV**.
+- A logistic regression model to predict **CAT.MEDV**.
+
+**Key metrics**: RMSE = **4.773**, R² = **0.689**, Accuracy = **0.961**.
+
+## Visuals
+
+![Correlation Heatmap](dma818_report_assets/corr_heatmap.png)
+![MEDV Distribution](dma818_report_assets/medv_hist.png)
+![RM vs MEDV](dma818_report_assets/rm_vs_medv.png)
+![LSTAT vs MEDV](dma818_report_assets/lstat_vs_medv.png)
+![Residuals vs Predicted](dma818_report_assets/residuals.png)
+![Confusion Matrix](dma818_report_assets/confusion_matrix.png)
+
+## Reproducibility
+
+Run:
+
+```bash
+python dma818_pipeline.py --data BostonHousing.csv --out out
+```
+
+Artifacts:
+- `out/metrics.json`
+- PNG plots

@@ -1,0 +1,16 @@
+name: Cleanup Preview (Heroku)
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [ "main", "master" ]
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    env:
+      PREVIEW_APP: ${{ secrets.HEROKU_APP_NAME }}-pr-${{ github.event.number }}
+    steps:
+      - name: Delete Heroku preview app
+        run: |
+          curl -n -X DELETE https://api.heroku.com/apps/${{ env.PREVIEW_APP }}             -H "Accept: application/vnd.heroku+json; version=3"             -H "Authorization: Bearer ${{ secrets.HEROKU_API_KEY }}" || true
