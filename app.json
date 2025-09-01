@@ -1,0 +1,9 @@
+{
+  "name": "dma818-boston-demo",
+  "description": "DMA818 - Boston Housing Streamlit app",
+  "repository": "https://github.com/eskgyimah/DMA818-BostonHousing",
+  "keywords": ["streamlit","scikit-learn","python","ml"],
+  "buildpacks": [{ "url": "heroku/python" }],
+  "env": { "PYTHON_VERSION": { "description": "Python runtime", "value": "3.11.x" } },
+  "stack": "heroku-22"
+}
