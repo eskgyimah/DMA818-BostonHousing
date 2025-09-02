@@ -26,3 +26,7 @@ Thumbs.db
 # Reports/exports (kept tracked by LFS, but ignore raw intermediates)
 *.nbconvert.ipynb
 .vs/
+.vs/
+Edward_Gyimah.ipynb
+Edward_Gyimah.html
+Edward_Gyimah.py
