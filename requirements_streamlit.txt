@@ -9,3 +9,5 @@ plotly==5.22.0
 # fix notebook render (MathBlockParser/parse_axt_heading)
 markdown-it-py>=3.0.0
 mdit-py-plugins>=0.4.0
+\
+# rebuild bump 2025-09-02T23:47:32\
