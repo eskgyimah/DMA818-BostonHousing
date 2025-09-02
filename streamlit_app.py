@@ -172,7 +172,7 @@ with tab1:
             ax_v.barh(var_series.index[::-1], var_series.values[::-1])
             ax_v.set_xlabel("Variance"); ax_v.set_ylabel("Feature"); ax_v.set_title("Feature Variance")
             st.pyplot(fig_v, width="stretch")
-            var_df = var_series.reset_index(names=["feature", "variance"])
+            var_df = var_series.rename("variance").reset_index().rename(columns={"index":"feature"})
             st.download_button("📥 Download variance (CSV)", df_csv_str(var_df),
                                file_name="eda_variance.csv", mime="text/csv")
             st.session_state["exports"]["eda"]["eda_variance.csv"] = df_csv_str(var_df)
