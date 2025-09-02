@@ -144,9 +144,9 @@ tab1, tab2, tab3, tab_nb = st.tabs(["📊 EDA", "📈 Regression (MEDV)", "🎯 
 # ====================== EDA ======================
 with tab1:
     st.subheader("Overview")
-    st.dataframe(df.head(20), use_container_width=True)
+    st.dataframe(df.head(20), width="stretch")
     st.write("Summary")
-    st.dataframe(df.describe(include="all"), use_container_width=True)
+    st.dataframe(df.describe(include="all"), width="stretch")
 
     # Correlation heatmap (numeric)
     st.subheader("Correlation Heatmap (Numeric)")
@@ -157,7 +157,7 @@ with tab1:
         ax.set_xticks(range(len(corr.columns))); ax.set_xticklabels(corr.columns, rotation=90)
         ax.set_yticks(range(len(corr.columns))); ax.set_yticklabels(corr.columns)
         fig.colorbar(im)
-        st.pyplot(fig, use_container_width=True)
+        st.pyplot(fig, width="stretch")
 
     # Feature signals: variance + |corr with MEDV|
     st.subheader("Feature Signals")
@@ -171,7 +171,7 @@ with tab1:
             fig_v, ax_v = plt.subplots(figsize=(6, 5))
             ax_v.barh(var_series.index[::-1], var_series.values[::-1])
             ax_v.set_xlabel("Variance"); ax_v.set_ylabel("Feature"); ax_v.set_title("Feature Variance")
-            st.pyplot(fig_v, use_container_width=True)
+            st.pyplot(fig_v, width="stretch")
             var_df = var_series.reset_index(names=["feature", "variance"])
             st.download_button("📥 Download variance (CSV)", df_csv_str(var_df),
                                file_name="eda_variance.csv", mime="text/csv")
@@ -185,7 +185,7 @@ with tab1:
             fig_c, ax_c = plt.subplots(figsize=(6, 5))
             ax_c.barh(corr_target.index[::-1], corr_target.values[::-1])
             ax_c.set_xlabel("|corr|"); ax_c.set_ylabel("Feature"); ax_c.set_title("|Correlation| with MEDV")
-            st.pyplot(fig_c, use_container_width=True)
+            st.pyplot(fig_c, width="stretch")
             st.download_button("📥 Download |corr(MEDV)| (CSV)", df_csv_str(corr_df),
                                file_name="eda_abs_corr_MEDV.csv", mime="text/csv")
             st.session_state["exports"]["eda"]["eda_abs_corr_MEDV.csv"] = df_csv_str(corr_df)
@@ -243,7 +243,7 @@ with tab2:
         else:
             # Comparison (holdout)
             met = pd.DataFrame([{"Model": r["model"].title(), "RMSE": r["rmse"], "R²": r["r2"]} for r in results])
-            st.dataframe(met.style.format({"RMSE": "{:.3f}", "R²": "{:.3f}"}), use_container_width=True)
+            st.dataframe(met.style.format({"RMSE": "{:.3f}", "R²": "{:.3f}"}), width="stretch")
             export_files["regression_comparison.csv"] = df_csv_str(met)
 
             # Pick primary model
@@ -259,7 +259,7 @@ with tab2:
             resid = y_test.values - y_pred
             ax.scatter(y_pred, resid, s=12); ax.axhline(0, linestyle="--")
             ax.set_xlabel("Predicted MEDV"); ax.set_ylabel("Residual")
-            st.pyplot(fig_resid, use_container_width=True)
+            st.pyplot(fig_resid, width="stretch")
             export_files[f"residuals_{primary}.png"] = fig_png_bytes(fig_resid)
 
             # Predictions + metrics files
@@ -300,7 +300,7 @@ with tab2:
 
                 if cv_rows:
                     cv_df = pd.DataFrame(cv_rows)
-                    st.dataframe(cv_df.style.format({cv_df.columns[1]: "{:.3f}", "std": "{:.3f}"}), use_container_width=True)
+                    st.dataframe(cv_df.style.format({cv_df.columns[1]: "{:.3f}", "std": "{:.3f}"}), width="stretch")
                     export_files["cv_results.csv"] = df_csv_str(cv_df)
 
                 # Hyperparameter sweeps (Ridge/Lasso)
@@ -323,7 +323,7 @@ with tab2:
                         fig_rs, ax_rs = plt.subplots()
                         ax_rs.semilogx(al, m); ax_rs.fill_between(al, m - sdev, m + sdev, alpha=0.2)
                         ax_rs.set_xlabel("Ridge α (log)"); ax_rs.set_ylabel("CV RMSE")
-                        st.pyplot(fig_rs, use_container_width=True)
+                        st.pyplot(fig_rs, width="stretch")
                         export_files["ridge_sweep.png"] = fig_png_bytes(fig_rs)
 
                     if use_lasso:
@@ -331,7 +331,7 @@ with tab2:
                         fig_ls, ax_ls = plt.subplots()
                         ax_ls.semilogx(al, m); ax_ls.fill_between(al, m - sdev, m + sdev, alpha=0.2)
                         ax_ls.set_xlabel("Lasso α (log)"); ax_ls.set_ylabel("CV RMSE")
-                        st.pyplot(fig_ls, use_container_width=True)
+                        st.pyplot(fig_ls, width="stretch")
                         export_files["lasso_sweep.png"] = fig_png_bytes(fig_ls)
 
                 # Learning curve (bias–variance)
@@ -359,7 +359,7 @@ with tab2:
                 ax_lv.plot(sizes * len(X), val_rmse, marker="o", label="CV RMSE")
                 ax_lv.set_xlabel("Training examples"); ax_lv.set_ylabel("RMSE"); ax_lv.legend()
                 ax_lv.set_title("Bias–Variance (Learning Curve)")
-                st.pyplot(fig_lv, use_container_width=True)
+                st.pyplot(fig_lv, width="stretch")
                 export_files[f"learning_curve_{primary}.png"] = fig_png_bytes(fig_lv)
 
             # Permutation Importance (Top-K + error bars)
@@ -387,7 +387,7 @@ with tab2:
                         ax_pi.barh(imp_k["feature"], imp_k["importance"], xerr=imp_k["std"], capsize=3)
                         ax_pi.set_xlabel("Permutation importance (|ΔRMSE|)")
                         ax_pi.set_ylabel("Feature")
-                        st.pyplot(fig_pi, use_container_width=True)
+                        st.pyplot(fig_pi, width="stretch")
                         export_files[f"perm_importance_{primary}_top{k}.csv"] = df_csv_str(imp_k[::-1])
                         export_files[f"perm_importance_{primary}_top{k}.png"] = fig_png_bytes(fig_pi)
 
@@ -404,7 +404,7 @@ with tab2:
                             fig_pd, ax_pd = plt.subplots()
                             PartialDependenceDisplay.from_estimator(chosen["pipe"], X, [f], ax=ax_pd)
                             ax_pd.set_title(f"Partial dependence: {f}")
-                            st.pyplot(fig_pd, use_container_width=True)
+                            st.pyplot(fig_pd, width="stretch")
                             export_files[f"partial_dependence_{primary}_{f}.png"] = fig_png_bytes(fig_pd)
                     else:
                         st.info("Coefficients are all zero; PD not informative.")
@@ -528,7 +528,7 @@ with tab3:
                     ax_pi_c.barh(imp_k["feature"], imp_k["importance"], xerr=imp_k["std"], capsize=3)
                     ax_pi_c.set_xlabel("Permutation importance (ΔAccuracy)")
                     ax_pi_c.set_ylabel("Feature")
-                    st.pyplot(fig_pi_c, use_container_width=True)
+                    st.pyplot(fig_pi_c, width="stretch")
                     cls_export[f"classification_perm_importance_top{k}.csv"] = df_csv_str(imp_k[::-1])
                     cls_export[f"classification_perm_importance_top{k}.png"] = fig_png_bytes(fig_pi_c)
 
