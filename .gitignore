@@ -30,3 +30,9 @@ Thumbs.db
 Edward_Gyimah.ipynb
 Edward_Gyimah.html
 Edward_Gyimah.py
+
+# allow term-paper artifacts
+!Edward_Gyimah.ipynb
+!Edward_Gyimah.html
+!assets/Edward_Gyimah.ipynb
+!assets/Edward_Gyimah.html
