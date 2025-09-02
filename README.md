@@ -22,3 +22,5 @@ Interactive EDA + Regression + Classification for the Boston Housing dataset.
 ![Release](https://img.shields.io/github/v/release/eskgyimah/DMA818-BostonHousing?display_name=tag)
 
 **Latest run:** RMSE 4.7726 | R² 0.6894 | Accuracy 96.08%
+
+**Term paper:** [Edward_Gyimah.ipynb](https://github.com/eskgyimah/DMA818-BostonHousing/releases/download/v0.1.0/Edward_Gyimah.ipynb) · [Edward_Gyimah.html](https://github.com/eskgyimah/DMA818-BostonHousing/releases/download/v0.1.0/Edward_Gyimah.html)

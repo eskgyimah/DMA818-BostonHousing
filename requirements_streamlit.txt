@@ -5,3 +5,7 @@ matplotlib==3.8.4
 seaborn==0.13.2
 streamlit==1.36.0
 plotly==5.22.0
+
+# fix notebook render (MathBlockParser/parse_axt_heading)
+markdown-it-py>=3.0.0
+mdit-py-plugins>=0.4.0
