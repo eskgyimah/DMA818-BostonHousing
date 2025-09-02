@@ -16,14 +16,22 @@ from sklearn.metrics import (
     accuracy_score, classification_report, confusion_matrix
 )
 from sklearn.inspection import permutation_importance
+from sklearn.inspection import PartialDependenceDisplay
 
-# ---------------------- Page ----------------------
+# ====================== Page ======================
 st.set_page_config(page_title="DMA818 — Boston Housing", layout="wide")
 st.title("DMA818 — Boston Housing Interactive App")
 st.caption("EDA • Regression (Linear/Ridge/Lasso) • Classification (Logistic) — Matplotlib visuals only")
 
 # --- Shareable URL widget (copies current URL incl. query params) ---
-st.html("""
+def _safe_html(html_str, **kwargs):
+    try:
+        return st.html(html_str, **kwargs)  # Newer Streamlit
+    except Exception:
+        import streamlit.components.v1 as components
+        return components.html(html_str, **kwargs)
+
+_safe_html("""
 <div style="display:flex;gap:8px;align-items:center;margin:6px 0 18px 0;">
   <input id="shareurl" style="flex:1;padding:8px;border:1px solid #ccc;border-radius:6px" />
   <button id="copybtn" style="padding:8px 12px;border-radius:6px;border:1px solid #ddd;cursor:pointer">
@@ -36,17 +44,19 @@ const b = document.getElementById('copybtn');
 const set = () => { try { i.value = window.location.href; } catch(e){} };
 set();
 b.onclick = async () => {
-  try { await navigator.clipboard.writeText(window.location.href); b.textContent = "Copied!"; setTimeout(()=>b.textContent="Copy URL", 1200); }
-  catch(e){ i.select(); document.execCommand('copy'); b.textContent="Copied!"; setTimeout(()=>b.textContent="Copy URL",1200); }
+  try { await navigator.clipboard.writeText(window.location.href);
+        b.textContent = "Copied!"; setTimeout(()=>b.textContent="Copy URL", 1200); }
+  catch(e){ i.select(); document.execCommand('copy');
+            b.textContent="Copied!"; setTimeout(()=>b.textContent="Copy URL",1200); }
 };
 </script>
-""")
+""", height=70)
 
-
-# ---------------------- Helpers ----------------------
+# ====================== Helpers ======================
 def _qp_get(key, default, cast):
     """Query-param getter with Streamlit new/legacy API support."""
-    try: val = st.query_params.get(key)
+    try:
+        val = st.query_params.get(key)
     except Exception:
         try:
             v = st.experimental_get_query_params().get(key, [None])
@@ -63,11 +73,12 @@ def _qp_get(key, default, cast):
 def _qp_set(**kwargs):
     """Query-param setter with Streamlit new/legacy API support."""
     payload = {k: str(v) for k, v in kwargs.items() if v is not None}
-    try: st.query_params.update(payload)
-    except Exception: st.experimental_set_query_params(**payload)
+    try:
+        st.query_params.update(payload)
+    except Exception:
+        st.experimental_set_query_params(**payload)
 
 def fig_png_bytes(fig) -> bytes:
-    """Render a Matplotlib figure to PNG bytes."""
     buf = io.BytesIO()
     fig.savefig(buf, format="png", bbox_inches="tight")
     buf.seek(0)
@@ -83,7 +94,11 @@ def json_str(obj: dict) -> str:
     json.dump(obj, buf, indent=2)
     return buf.getvalue()
 
-# ---------------------- Data loading (cached) ----------------------
+# Master stash for the global ZIP export
+if "exports" not in st.session_state:
+    st.session_state["exports"] = {"eda": {}, "reg": {}, "cls": {}}
+
+# ====================== Data loading (cached) ======================
 @st.cache_data
 def load_default() -> pd.DataFrame:
     csv = Path(__file__).resolve().parent / "BostonHousing.csv"
@@ -123,7 +138,8 @@ with st.sidebar.expander("⚙️ Model settings", expanded=False):
     seed      = st.number_input("Random state", 0, 10000, value=seed_default, step=1, key="seed")
 _qp_set(ts=test_size, seed=seed)
 
-tab1, tab2, tab3 = st.tabs(["📊 EDA", "📈 Regression (MEDV)", "🎯 Classification (CAT.MEDV)"])
+# ====================== Tabs ======================
+tab1, tab2, tab3, tab_nb = st.tabs(["📊 EDA", "📈 Regression (MEDV)", "🎯 Classification (CAT.MEDV)", "📓 Notebook"])
 
 # ====================== EDA ======================
 with tab1:
@@ -146,20 +162,24 @@ with tab1:
     # Feature signals: variance + |corr with MEDV|
     st.subheader("Feature Signals")
     num_df = df.select_dtypes(include=[np.number])
-    signals_cols = st.columns(2)
+    sig_cols = st.columns(2)
+
     # Variance (unsupervised)
-    with signals_cols[0]:
+    with sig_cols[0]:
         if not num_df.empty:
             var_series = num_df.var().sort_values(ascending=False)
             fig_v, ax_v = plt.subplots(figsize=(6, 5))
             ax_v.barh(var_series.index[::-1], var_series.values[::-1])
             ax_v.set_xlabel("Variance"); ax_v.set_ylabel("Feature"); ax_v.set_title("Feature Variance")
             st.pyplot(fig_v, use_container_width=True)
-            st.download_button("📥 Download variance (CSV)", df_csv_str(var_series.reset_index(names=["feature", "variance"])),
+            var_df = var_series.reset_index(names=["feature", "variance"])
+            st.download_button("📥 Download variance (CSV)", df_csv_str(var_df),
                                file_name="eda_variance.csv", mime="text/csv")
+            st.session_state["exports"]["eda"]["eda_variance.csv"] = df_csv_str(var_df)
+
     # |corr with MEDV| (supervised proxy)
-    with signals_cols[1]:
-        if "MEDV" in df.columns:
+    with sig_cols[1]:
+        if "MEDV" in df.columns and not num_df.empty:
             corr_target = num_df.drop(columns=["MEDV"], errors="ignore").corrwith(df["MEDV"]).abs().sort_values(ascending=False)
             corr_df = corr_target.reset_index().rename(columns={"index": "feature", 0: "abs_corr_with_MEDV"})
             fig_c, ax_c = plt.subplots(figsize=(6, 5))
@@ -168,6 +188,7 @@ with tab1:
             st.pyplot(fig_c, use_container_width=True)
             st.download_button("📥 Download |corr(MEDV)| (CSV)", df_csv_str(corr_df),
                                file_name="eda_abs_corr_MEDV.csv", mime="text/csv")
+            st.session_state["exports"]["eda"]["eda_abs_corr_MEDV.csv"] = df_csv_str(corr_df)
         else:
             st.info("MEDV not found — correlation-to-target panel hidden.")
 
@@ -250,7 +271,7 @@ with tab2:
                 "ridge_alpha": float(ridge_a), "lasso_alpha": float(lasso_a)
             })
 
-            # ---- CV / Sweeps / Learning curve (same as before) ----
+            # ---- CV / Sweeps / Learning curve ----
             with st.expander("📚 Cross-Validation • Hyperparameter Sweeps • Bias–Variance", expanded=False):
                 ccv1, ccv2, ccv3 = st.columns([1,1,1])
                 with ccv1:
@@ -282,7 +303,7 @@ with tab2:
                     st.dataframe(cv_df.style.format({cv_df.columns[1]: "{:.3f}", "std": "{:.3f}"}), use_container_width=True)
                     export_files["cv_results.csv"] = df_csv_str(cv_df)
 
-                # Sweeps
+                # Hyperparameter sweeps (Ridge/Lasso)
                 if do_sweep and (use_ridge or use_lasso):
                     def sweep_alphas(model_name):
                         alphas = np.logspace(-3, 3, 20)
@@ -313,7 +334,7 @@ with tab2:
                         st.pyplot(fig_ls, use_container_width=True)
                         export_files["lasso_sweep.png"] = fig_png_bytes(fig_ls)
 
-                # Learning curve
+                # Learning curve (bias–variance)
                 if primary == "linear":
                     pipe_chosen = Pipeline([("scaler", StandardScaler()), ("m", LinearRegression())])
                 elif primary == "ridge":
@@ -341,7 +362,7 @@ with tab2:
                 st.pyplot(fig_lv, use_container_width=True)
                 export_files[f"learning_curve_{primary}.png"] = fig_png_bytes(fig_lv)
 
-            # Permutation Importance (regression)
+            # Permutation Importance (Top-K + error bars)
             with st.expander("🧪 Permutation Importance", expanded=False):
                 nrep = st.slider("Repeats", 2, 50, 10, step=1, key="pi_rep_reg")
                 run_pi = st.checkbox("Compute permutation importance", value=False, key="pi_run_reg")
@@ -359,15 +380,38 @@ with tab2:
                             "importance": np.abs(pi.importances_mean),
                             "std": pi.importances_std
                         }).sort_values("importance", ascending=False)
-                        st.dataframe(imp, use_container_width=True)
-                        fig_pi, ax_pi = plt.subplots(figsize=(7, 5))
-                        ax_pi.barh(imp["feature"], imp["importance"])
-                        ax_pi.invert_yaxis(); ax_pi.set_xlabel("Permutation importance (|ΔRMSE|)")
+                        kmax = max(1, min(15, len(imp)))
+                        k = st.slider("Top-K features", 1, kmax, min(8, kmax), key="pi_topk_reg")
+                        imp_k = imp.head(k).iloc[::-1]
+                        fig_pi, ax_pi = plt.subplots(figsize=(7, 0.45*len(imp_k)+1))
+                        ax_pi.barh(imp_k["feature"], imp_k["importance"], xerr=imp_k["std"], capsize=3)
+                        ax_pi.set_xlabel("Permutation importance (|ΔRMSE|)")
+                        ax_pi.set_ylabel("Feature")
                         st.pyplot(fig_pi, use_container_width=True)
-                        export_files[f"perm_importance_{primary}.csv"] = df_csv_str(imp)
-                        export_files[f"perm_importance_{primary}.png"] = fig_png_bytes(fig_pi)
+                        export_files[f"perm_importance_{primary}_top{k}.csv"] = df_csv_str(imp_k[::-1])
+                        export_files[f"perm_importance_{primary}_top{k}.png"] = fig_png_bytes(fig_pi)
 
-            # -------- Pipeline config export (JSON) --------
+            # Partial Dependence (top-2 by |coef|)
+            with st.expander("🧩 Partial Dependence (top-2 by |coef|)", expanded=False):
+                est = chosen["pipe"].named_steps["m"]
+                if hasattr(est, "coef_"):
+                    coefs = np.abs(np.ravel(est.coef_))
+                    if np.any(coefs):
+                        top2_idx = np.argsort(coefs)[-2:][::-1]
+                        top2_feats = [X.columns[i] for i in top2_idx]
+                        st.write(f"Top-2: **{top2_feats[0]}**, **{top2_feats[1]}**")
+                        for f in top2_feats:
+                            fig_pd, ax_pd = plt.subplots()
+                            PartialDependenceDisplay.from_estimator(chosen["pipe"], X, [f], ax=ax_pd)
+                            ax_pd.set_title(f"Partial dependence: {f}")
+                            st.pyplot(fig_pd, use_container_width=True)
+                            export_files[f"partial_dependence_{primary}_{f}.png"] = fig_png_bytes(fig_pd)
+                    else:
+                        st.info("Coefficients are all zero; PD not informative.")
+                else:
+                    st.info("Primary model has no coefficients; PD not available.")
+
+            # Pipeline config JSON
             pipeline_cfg = {
                 "task": "regression",
                 "dataset": {"rows": int(df.shape[0]), "cols": list(df.columns)},
@@ -384,7 +428,7 @@ with tab2:
                                mime="application/json")
             export_files["pipeline_config_regression.json"] = json_str(pipeline_cfg)
 
-            # ---------------------- Export session (.zip) ----------------------
+            # Export session (regression)
             st.divider()
             if st.button("🗂️ Build export (.zip)"):
                 mem = io.BytesIO()
@@ -403,6 +447,10 @@ with tab2:
                     file_name=f"boston_regression_session_{stamp}.zip",
                     mime="application/zip"
                 )
+
+            # Merge into global export
+            st.session_state["exports"]["reg"].update(export_files)
+
     else:
         st.warning("Columns MEDV and CAT. MEDV are required.")
 
@@ -434,7 +482,7 @@ with tab3:
         cls_report = classification_report(y_test, y_pred)
         st.text(cls_report)
 
-        # CV (accuracy)
+        # CV accuracy quick panel
         cls_export = {}
         with st.expander("📚 Cross-Validation (Accuracy)"):
             k_folds_c = st.number_input("K-Folds (classification)", 3, 20, 5, step=1, key="kfolds_cls")
@@ -448,14 +496,14 @@ with tab3:
             cls_cv_df = pd.DataFrame({"metric": ["accuracy_mean", "accuracy_std"], "value": [scores.mean(), scores.std()]})
             cls_export["classification_cv_summary.csv"] = df_csv_str(cls_cv_df)
 
-        # Predictions + metrics
+        # Predictions + metrics for export
         pred_df = pd.DataFrame({"y_true": y_test.values, "y_pred": y_pred})
         cls_export["classification_predictions.csv"] = df_csv_str(pred_df)
         cls_export["classification_metrics.json"] = json_str({"accuracy": acc, "test_size": float(test_size), "seed": int(seed)})
         cls_export["confusion_matrix.png"] = fig_png_bytes(fig_cm)
         cls_export["classification_report.txt"] = cls_report
 
-        # Permutation Importance (classification)
+        # Permutation Importance (Top-K + error bars)
         with st.expander("🧪 Permutation Importance"):
             nrep_c = st.slider("Repeats", 2, 50, 10, step=1, key="pi_rep_cls")
             run_pi_c = st.checkbox("Compute permutation importance", value=False, key="pi_run_cls")
@@ -473,16 +521,18 @@ with tab3:
                         "importance": np.abs(pi.importances_mean),
                         "std": pi.importances_std
                     }).sort_values("importance", ascending=False)
-                    st.dataframe(imp, use_container_width=True)
-                    fig_pi_c, ax_pi_c = plt.subplots(figsize=(7, 5))
-                    ax_pi_c.barh(imp["feature"], imp["importance"])
-                    ax_pi_c.invert_yaxis()
+                    kmax = max(1, min(15, len(imp)))
+                    k = st.slider("Top-K features", 1, kmax, min(8, kmax), key="pi_topk_cls")
+                    imp_k = imp.head(k).iloc[::-1]
+                    fig_pi_c, ax_pi_c = plt.subplots(figsize=(7, 0.45*len(imp_k)+1))
+                    ax_pi_c.barh(imp_k["feature"], imp_k["importance"], xerr=imp_k["std"], capsize=3)
                     ax_pi_c.set_xlabel("Permutation importance (ΔAccuracy)")
+                    ax_pi_c.set_ylabel("Feature")
                     st.pyplot(fig_pi_c, use_container_width=True)
-                    cls_export["classification_perm_importance.csv"] = df_csv_str(imp)
-                    cls_export["classification_perm_importance.png"] = fig_png_bytes(fig_pi_c)
+                    cls_export[f"classification_perm_importance_top{k}.csv"] = df_csv_str(imp_k[::-1])
+                    cls_export[f"classification_perm_importance_top{k}.png"] = fig_png_bytes(fig_pi_c)
 
-        # -------- Pipeline config export (JSON) --------
+        # Pipeline config JSON
         pipeline_cfg_cls = {
             "task": "classification",
             "dataset": {"rows": int(df.shape[0]), "cols": list(df.columns)},
@@ -497,7 +547,7 @@ with tab3:
                            mime="application/json")
         cls_export["pipeline_config_classification.json"] = json_str(pipeline_cfg_cls)
 
-        # Export session zip
+        # Export session (classification)
         st.divider()
         if st.button("🗂️ Build export (.zip)", key="zip_cls"):
             mem = io.BytesIO()
@@ -516,10 +566,87 @@ with tab3:
                 file_name=f"boston_classification_session_{stamp}.zip",
                 mime="application/zip"
             )
+
+        # Merge into global export
+        st.session_state["exports"]["cls"].update(cls_export)
+
     else:
         st.warning("Columns MEDV and CAT. MEDV are required.")
-        # --- Build footer ---
-        from datetime import datetime, timezone
-        build_ts = datetime.fromtimestamp(Path(__file__).stat().st_mtime, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-        st.caption(f"Build: {build_ts} • Streamlit {st.__version__}")
 
+# ====================== Notebook Viewer ======================
+with tab_nb:
+    st.subheader("Notebook Viewer")
+
+    # Embedded sample notebook (small, synthetic)
+    SAMPLE_NB = {
+        "cells": [
+            {"cell_type": "markdown", "metadata": {}, "source": [
+                "# Sample Boston Housing Notebook\\n",
+                "Quick demo: load CSV and preview head.\\n"
+            ]},
+            {"cell_type": "code", "execution_count": None, "metadata": {}, "outputs": [], "source": [
+                "import pandas as pd\\n",
+                "df = pd.read_csv('BostonHousing.csv')\\n",
+                "df.head()\\n"
+            ]},
+        ],
+        "metadata": {"kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"}},
+        "nbformat": 4, "nbformat_minor": 5
+    }
+    sample_bytes = json.dumps(SAMPLE_NB, indent=2).encode("utf-8")
+
+    cleft, cright = st.columns(2)
+    with cleft:
+        st.download_button("📥 Download sample notebook", data=sample_bytes,
+                           file_name="sample_boston_notebook.ipynb", mime="application/x-ipynb+json")
+    with cright:
+        render_sample = st.button("👀 Render embedded sample now")
+
+    nb_file = st.file_uploader("…or upload a .ipynb to render", type=["ipynb"])
+
+    def _render_nb_html(nb_json_str: str):
+        try:
+            import nbformat
+            from nbconvert import HTMLExporter
+            nb = nbformat.reads(nb_json_str, as_version=4)
+            html_exporter = HTMLExporter()
+            html_exporter.exclude_input = False
+            html_exporter.exclude_output = False
+            body, _ = html_exporter.from_notebook_node(nb)
+            _safe_html(body, height=800)
+        except Exception as e:
+            st.error(f"Render failed ({e}); showing raw JSON.")
+            st.code(nb_json_str)
+
+    if render_sample:
+        _render_nb_html(json.dumps(SAMPLE_NB))
+
+    if nb_file:
+        try:
+            _render_nb_html(nb_file.getvalue().decode("utf-8"))
+        except Exception as e:
+            st.error(f"Failed to decode notebook: {e}")
+
+# ====================== Master Export (ALL) + Footer ======================
+st.divider()
+if st.button("📦 Download EVERYTHING (.zip)"):
+    mem = io.BytesIO()
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    with zipfile.ZipFile(mem, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for section, files in st.session_state["exports"].items():
+            for name, payload in files.items():
+                arc = f"{section}/{name}"
+                if isinstance(payload, bytes):
+                    zf.writestr(arc, payload)
+                else:
+                    zf.writestr(arc, payload.encode("utf-8"))
+    mem.seek(0)
+    st.download_button("⬇️ Export ALL (EDA+Regression+Classification).zip",
+                       data=mem.getvalue(),
+                       file_name=f"boston_full_session_{stamp}.zip",
+                       mime="application/zip")
+
+# Build/version footer
+from datetime import datetime, timezone
+build_ts = datetime.fromtimestamp(Path(__file__).stat().st_mtime, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+st.caption(f"Build: {build_ts} • Streamlit {st.__version__}")
