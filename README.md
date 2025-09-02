@@ -10,4 +10,4 @@ This repository contains:
 - Reports (DOCX/PDF/HTML), UCC-branded
 - Reusable ML pipeline (`dma818_pipeline.py`)
 - Streamlit app (`streamlit_app.py`) with auto-deploy
-- CI: lint/tests + deploys
+- CI: lint/tests + deploys[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://dma818-bostonhousing-a7sxfoly9ssrmqpzdbioqk.streamlit.app/)
