@@ -1,52 +1,25 @@
-name: CI
-
+﻿name: CI
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
-  smoke:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
-
+          python-version: '3.13'
       - name: Install deps
         run: |
-          python -m pip install -U pip wheel
-          pip install -r requirements.txt
-
-      - name: Import smoke
-        run: |
-          python - << 'PY'
-          import pandas, numpy, sklearn, streamlit, matplotlib
-          print("OK imports:", pandas.__version__, numpy.__version__, sklearn.__version__, streamlit.__version__, matplotlib.__version__)
-          PY
-
-      - name: Dataset smoke
-        run: |
-          python - << 'PY'
-          import pandas as pd
-          df = pd.read_csv("BostonHousing.csv")
-          need = {"MEDV","CAT. MEDV"}
-          missing = need - set(df.columns)
-          assert not missing, f"Missing columns: {missing}"
-          print("OK dataset:", df.shape)
-          PY
-
-      - name: App import smoke
-        run: |
-          python - << 'PY'
-          import importlib.util, pathlib
-          p = pathlib.Path("streamlit_app.py")
-          assert p.exists(), "streamlit_app.py missing"
-          spec = importlib.util.spec_from_file_location("app", str(p))
-          m = importlib.util.module_from_spec(spec)
-          spec.loader.exec_module(m)
-          print("OK app import")
-          PY
+          python -m pip install -U pip
+          pip install -r requirements.txt -r requirements_streamlit.txt pre-commit
+      - name: Lint & format
+        run: pre-commit run --all-files
+      - name: Smoke test pipeline
+        run: python dma818_pipeline.py --data BostonHousing.csv
+      - name: Import check (streamlit_app)
+        run: python -c "import importlib; importlib.import_module('streamlit_app'); print('import OK')"
