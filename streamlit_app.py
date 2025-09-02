@@ -1,27 +1,39 @@
+import io
+import json
+import time
+import zipfile
 from pathlib import Path
-import io, json, zipfile, time
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import streamlit as st
-
-from sklearn.model_selection import (
-    train_test_split, KFold, RepeatedKFold, cross_val_score, learning_curve
-)
-from sklearn.preprocessing import StandardScaler
-from sklearn.pipeline import Pipeline
-from sklearn.linear_model import LinearRegression, Ridge, Lasso, LogisticRegression
+from sklearn.inspection import PartialDependenceDisplay, permutation_importance
+from sklearn.linear_model import Lasso, LinearRegression, LogisticRegression, Ridge
 from sklearn.metrics import (
-    mean_squared_error, r2_score,
-    accuracy_score, classification_report, confusion_matrix
+    accuracy_score,
+    classification_report,
+    confusion_matrix,
+    mean_squared_error,
+    r2_score,
 )
-from sklearn.inspection import permutation_importance
-from sklearn.inspection import PartialDependenceDisplay
+from sklearn.model_selection import (
+    KFold,
+    RepeatedKFold,
+    cross_val_score,
+    learning_curve,
+    train_test_split,
+)
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
 # ====================== Page ======================
 st.set_page_config(page_title="DMA818 — Boston Housing", layout="wide")
 st.title("DMA818 — Boston Housing Interactive App")
-st.caption("EDA • Regression (Linear/Ridge/Lasso) • Classification (Logistic) — Matplotlib visuals only")
+st.caption(
+    "EDA • Regression (Linear/Ridge/Lasso) • Classification (Logistic) — Matplotlib visuals only"
+)
+
 
 # --- Shareable URL widget (copies current URL incl. query params) ---
 def _safe_html(html_str, **kwargs):
@@ -29,9 +41,12 @@ def _safe_html(html_str, **kwargs):
         return st.html(html_str, **kwargs)  # Newer Streamlit
     except Exception:
         import streamlit.components.v1 as components
+
         return components.html(html_str, **kwargs)
 
-_safe_html("""
+
+_safe_html(
+    """
 <div style="display:flex;gap:8px;align-items:center;margin:6px 0 18px 0;">
   <input id="shareurl" style="flex:1;padding:8px;border:1px solid #ccc;border-radius:6px" />
   <button id="copybtn" style="padding:8px 12px;border-radius:6px;border:1px solid #ddd;cursor:pointer">
@@ -50,7 +65,10 @@ b.onclick = async () => {
             b.textContent="Copied!"; setTimeout(()=>b.textContent="Copy URL",1200); }
 };
 </script>
-""", height=70)
+""",
+    height=70,
+)
+
 
 # ====================== Helpers ======================
 def _qp_get(key, default, cast):
@@ -70,6 +88,7 @@ def _qp_get(key, default, cast):
     except Exception:
         return default
 
+
 def _qp_set(**kwargs):
     """Query-param setter with Streamlit new/legacy API support."""
     payload = {k: str(v) for k, v in kwargs.items() if v is not None}
@@ -78,25 +97,30 @@ def _qp_set(**kwargs):
     except Exception:
         st.experimental_set_query_params(**payload)
 
+
 def fig_png_bytes(fig) -> bytes:
     buf = io.BytesIO()
     fig.savefig(buf, format="png", bbox_inches="tight")
     buf.seek(0)
     return buf.getvalue()
 
+
 def df_csv_str(df: pd.DataFrame) -> str:
     buf = io.StringIO()
     df.to_csv(buf, index=False)
     return buf.getvalue()
+
 
 def json_str(obj: dict) -> str:
     buf = io.StringIO()
     json.dump(obj, buf, indent=2)
     return buf.getvalue()
 
+
 # Master stash for the global ZIP export
 if "exports" not in st.session_state:
     st.session_state["exports"] = {"eda": {}, "reg": {}, "cls": {}}
+
 
 # ====================== Data loading (cached) ======================
 @st.cache_data
@@ -104,14 +128,16 @@ def load_default() -> pd.DataFrame:
     csv = Path(__file__).resolve().parent / "BostonHousing.csv"
     return pd.read_csv(csv)
 
+
 @st.cache_data
 def load_from_upload(file) -> pd.DataFrame:
     file.seek(0)
     return pd.read_csv(file)
 
+
 uploaded = st.sidebar.file_uploader("Upload CSV (optional)", type=["csv"])
 df = load_from_upload(uploaded) if uploaded is not None else load_default()
-
+globals().get("_check_schema", (lambda _df: None))(df)
 # Sidebar info + sample download
 st.sidebar.write("Rows × Columns:", df.shape)
 st.sidebar.write("Columns:", list(df.columns))
@@ -131,15 +157,17 @@ if st.sidebar.button("🔄 Reset selections"):
     st.rerun()
 
 # Global model settings (URL-backed)
-ts_default   = _qp_get("ts",   0.20, float)
-seed_default = _qp_get("seed", 42,   int)
+ts_default = _qp_get("ts", 0.20, float)
+seed_default = _qp_get("seed", 42, int)
 with st.sidebar.expander("⚙️ Model settings", expanded=False):
     test_size = st.slider("Test size", 0.10, 0.50, value=ts_default, step=0.05, key="test_size")
-    seed      = st.number_input("Random state", 0, 10000, value=seed_default, step=1, key="seed")
+    seed = st.number_input("Random state", 0, 10000, value=seed_default, step=1, key="seed")
 _qp_set(ts=test_size, seed=seed)
 
 # ====================== Tabs ======================
-tab1, tab2, tab3, tab_nb = st.tabs(["📊 EDA", "📈 Regression (MEDV)", "🎯 Classification (CAT.MEDV)", "📓 Notebook"])
+tab1, tab2, tab3, tab_nb = st.tabs(
+    ["📊 EDA", "📈 Regression (MEDV)", "🎯 Classification (CAT.MEDV)", "📓 Notebook"]
+)
 
 # ====================== EDA ======================
 with tab1:
@@ -154,8 +182,10 @@ with tab1:
     if corr.size:
         fig, ax = plt.subplots(figsize=(8, 6))
         im = ax.imshow(corr.values, interpolation="nearest")
-        ax.set_xticks(range(len(corr.columns))); ax.set_xticklabels(corr.columns, rotation=90)
-        ax.set_yticks(range(len(corr.columns))); ax.set_yticklabels(corr.columns)
+        ax.set_xticks(range(len(corr.columns)))
+        ax.set_xticklabels(corr.columns, rotation=90)
+        ax.set_yticks(range(len(corr.columns)))
+        ax.set_yticklabels(corr.columns)
         fig.colorbar(im)
         st.pyplot(fig, width="stretch")
 
@@ -170,24 +200,45 @@ with tab1:
             var_series = num_df.var().sort_values(ascending=False)
             fig_v, ax_v = plt.subplots(figsize=(6, 5))
             ax_v.barh(var_series.index[::-1], var_series.values[::-1])
-            ax_v.set_xlabel("Variance"); ax_v.set_ylabel("Feature"); ax_v.set_title("Feature Variance")
+            ax_v.set_xlabel("Variance")
+            ax_v.set_ylabel("Feature")
+            ax_v.set_title("Feature Variance")
             st.pyplot(fig_v, width="stretch")
-            var_df = var_series.rename("variance").reset_index().rename(columns={"index":"feature"})
-            st.download_button("📥 Download variance (CSV)", df_csv_str(var_df),
-                               file_name="eda_variance.csv", mime="text/csv")
+            var_df = (
+                var_series.rename("variance").reset_index().rename(columns={"index": "feature"})
+            )
+            st.download_button(
+                "📥 Download variance (CSV)",
+                df_csv_str(var_df),
+                file_name="eda_variance.csv",
+                mime="text/csv",
+            )
             st.session_state["exports"]["eda"]["eda_variance.csv"] = df_csv_str(var_df)
 
     # |corr with MEDV| (supervised proxy)
     with sig_cols[1]:
         if "MEDV" in df.columns and not num_df.empty:
-            corr_target = num_df.drop(columns=["MEDV"], errors="ignore").corrwith(df["MEDV"]).abs().sort_values(ascending=False)
-            corr_df = corr_target.reset_index().rename(columns={"index": "feature", 0: "abs_corr_with_MEDV"})
+            corr_target = (
+                num_df.drop(columns=["MEDV"], errors="ignore")
+                .corrwith(df["MEDV"])
+                .abs()
+                .sort_values(ascending=False)
+            )
+            corr_df = corr_target.reset_index().rename(
+                columns={"index": "feature", 0: "abs_corr_with_MEDV"}
+            )
             fig_c, ax_c = plt.subplots(figsize=(6, 5))
             ax_c.barh(corr_target.index[::-1], corr_target.values[::-1])
-            ax_c.set_xlabel("|corr|"); ax_c.set_ylabel("Feature"); ax_c.set_title("|Correlation| with MEDV")
+            ax_c.set_xlabel("|corr|")
+            ax_c.set_ylabel("Feature")
+            ax_c.set_title("|Correlation| with MEDV")
             st.pyplot(fig_c, width="stretch")
-            st.download_button("📥 Download |corr(MEDV)| (CSV)", df_csv_str(corr_df),
-                               file_name="eda_abs_corr_MEDV.csv", mime="text/csv")
+            st.download_button(
+                "📥 Download |corr(MEDV)| (CSV)",
+                df_csv_str(corr_df),
+                file_name="eda_abs_corr_MEDV.csv",
+                mime="text/csv",
+            )
             st.session_state["exports"]["eda"]["eda_abs_corr_MEDV.csv"] = df_csv_str(corr_df)
         else:
             st.info("MEDV not found — correlation-to-target panel hidden.")
@@ -200,41 +251,62 @@ with tab2:
         y = df["MEDV"]
 
         # Model toggles (URL-backed)
-        use_lin   = _qp_get("lin",   True,  lambda s: s.lower() != "false")
-        use_ridge = _qp_get("ridge", True,  lambda s: s.lower() != "false")
-        use_lasso = _qp_get("lasso", True,  lambda s: s.lower() != "false")
-        ridge_a   = _qp_get("ra",    1.0,   float)
-        lasso_a   = _qp_get("la",    0.1,   float)
-        primary   = _qp_get("model", "linear", str)
+        use_lin = _qp_get("lin", True, lambda s: s.lower() != "false")
+        use_ridge = _qp_get("ridge", True, lambda s: s.lower() != "false")
+        use_lasso = _qp_get("lasso", True, lambda s: s.lower() != "false")
+        ridge_a = _qp_get("ra", 1.0, float)
+        lasso_a = _qp_get("la", 0.1, float)
+        primary = _qp_get("model", "linear", str)
 
         c1, c2, c3 = st.columns(3)
         with c1:
-            use_lin   = st.checkbox("Linear", value=use_lin, key="use_lin")
+            use_lin = st.checkbox("Linear", value=use_lin, key="use_lin")
         with c2:
-            use_ridge = st.checkbox("Ridge",  value=use_ridge, key="use_ridge")
-            ridge_a   = st.number_input("α (Ridge)", 0.0001, 1000.0, value=float(ridge_a), step=0.1, key="ridge_a")
+            use_ridge = st.checkbox("Ridge", value=use_ridge, key="use_ridge")
+            ridge_a = st.number_input(
+                "α (Ridge)", 0.0001, 1000.0, value=float(ridge_a), step=0.1, key="ridge_a"
+            )
         with c3:
-            use_lasso = st.checkbox("Lasso",  value=use_lasso, key="use_lasso")
-            lasso_a   = st.number_input("α (Lasso)", 0.0001, 1000.0, value=float(lasso_a), step=0.1, key="lasso_a")
+            use_lasso = st.checkbox("Lasso", value=use_lasso, key="use_lasso")
+            lasso_a = st.number_input(
+                "α (Lasso)", 0.0001, 1000.0, value=float(lasso_a), step=0.1, key="lasso_a"
+            )
         _qp_set(lin=use_lin, ridge=use_ridge, lasso=use_lasso, ra=ridge_a, la=lasso_a)
 
         # Split
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=seed)
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=test_size, random_state=seed
+        )
 
         def eval_model(pipe, name):
             pipe.fit(X_train, y_train)
             y_pred = pipe.predict(X_test)
             rmse = float(np.sqrt(mean_squared_error(y_test, y_pred)))
-            r2   = float(r2_score(y_test, y_pred))
+            r2 = float(r2_score(y_test, y_pred))
             return {"model": name, "rmse": rmse, "r2": r2, "y_pred": y_pred, "pipe": pipe}
 
         results = []
         if use_lin:
-            results.append(eval_model(Pipeline([("scaler", StandardScaler()), ("m", LinearRegression())]), "linear"))
+            results.append(
+                eval_model(
+                    Pipeline([("scaler", StandardScaler()), ("m", LinearRegression())]), "linear"
+                )
+            )
         if use_ridge:
-            results.append(eval_model(Pipeline([("scaler", StandardScaler()), ("m", Ridge(alpha=ridge_a))]), "ridge"))
+            results.append(
+                eval_model(
+                    Pipeline([("scaler", StandardScaler()), ("m", Ridge(alpha=ridge_a))]), "ridge"
+                )
+            )
         if use_lasso:
-            results.append(eval_model(Pipeline([("scaler", StandardScaler()), ("m", Lasso(alpha=lasso_a, max_iter=10000))]), "lasso"))
+            results.append(
+                eval_model(
+                    Pipeline(
+                        [("scaler", StandardScaler()), ("m", Lasso(alpha=lasso_a, max_iter=10000))]
+                    ),
+                    "lasso",
+                )
+            )
 
         export_files = {}  # name -> bytes/str
 
@@ -242,14 +314,23 @@ with tab2:
             st.info("Select at least one model to compare.")
         else:
             # Comparison (holdout)
-            met = pd.DataFrame([{"Model": r["model"].title(), "RMSE": r["rmse"], "R²": r["r2"]} for r in results])
+            met = pd.DataFrame(
+                [{"Model": r["model"].title(), "RMSE": r["rmse"], "R²": r["r2"]} for r in results]
+            )
             st.dataframe(met.style.format({"RMSE": "{:.3f}", "R²": "{:.3f}"}), width="stretch")
             export_files["regression_comparison.csv"] = df_csv_str(met)
 
             # Pick primary model
             allowed = [r["model"] for r in results]
-            if primary not in allowed: primary = allowed[0]
-            primary = st.radio("Inspect model", allowed, index=allowed.index(primary), horizontal=True, key="primary_reg")
+            if primary not in allowed:
+                primary = allowed[0]
+            primary = st.radio(
+                "Inspect model",
+                allowed,
+                index=allowed.index(primary),
+                horizontal=True,
+                key="primary_reg",
+            )
             _qp_set(model=primary)
             chosen = next(r for r in results if r["model"] == primary)
             y_pred = chosen["y_pred"]
@@ -257,23 +338,33 @@ with tab2:
             # Residual plot
             fig_resid, ax = plt.subplots(figsize=(6, 4))
             resid = y_test.values - y_pred
-            ax.scatter(y_pred, resid, s=12); ax.axhline(0, linestyle="--")
-            ax.set_xlabel("Predicted MEDV"); ax.set_ylabel("Residual")
+            ax.scatter(y_pred, resid, s=12)
+            ax.axhline(0, linestyle="--")
+            ax.set_xlabel("Predicted MEDV")
+            ax.set_ylabel("Residual")
             st.pyplot(fig_resid, width="stretch")
             export_files[f"residuals_{primary}.png"] = fig_png_bytes(fig_resid)
 
             # Predictions + metrics files
             pred_df = pd.DataFrame({"y_true": y_test.values, "y_pred": y_pred})
             export_files[f"regression_{primary}_predictions.csv"] = df_csv_str(pred_df)
-            export_files[f"regression_{primary}_metrics.json"] = json_str({
-                "model": primary, "rmse": chosen["rmse"], "r2": chosen["r2"],
-                "test_size": float(test_size), "seed": int(seed),
-                "ridge_alpha": float(ridge_a), "lasso_alpha": float(lasso_a)
-            })
+            export_files[f"regression_{primary}_metrics.json"] = json_str(
+                {
+                    "model": primary,
+                    "rmse": chosen["rmse"],
+                    "r2": chosen["r2"],
+                    "test_size": float(test_size),
+                    "seed": int(seed),
+                    "ridge_alpha": float(ridge_a),
+                    "lasso_alpha": float(lasso_a),
+                }
+            )
 
             # ---- CV / Sweeps / Learning curve ----
-            with st.expander("📚 Cross-Validation • Hyperparameter Sweeps • Bias–Variance", expanded=False):
-                ccv1, ccv2, ccv3 = st.columns([1,1,1])
+            with st.expander(
+                "📚 Cross-Validation • Hyperparameter Sweeps • Bias–Variance", expanded=False
+            ):
+                ccv1, ccv2, ccv3 = st.columns([1, 1, 1])
                 with ccv1:
                     k_folds = st.number_input("K-Folds", 3, 20, 5, step=1, key="kfolds")
                 with ccv2:
@@ -284,80 +375,137 @@ with tab2:
                 cv = RepeatedKFold(n_splits=int(k_folds), n_repeats=int(repeats), random_state=seed)
 
                 def cv_rmse(pipe):
-                    scores = cross_val_score(pipe, X, y, scoring="neg_root_mean_squared_error", cv=cv)
+                    scores = cross_val_score(
+                        pipe, X, y, scoring="neg_root_mean_squared_error", cv=cv
+                    )
                     return -scores
 
                 cv_rows = []
                 if use_lin:
                     s = cv_rmse(Pipeline([("scaler", StandardScaler()), ("m", LinearRegression())]))
-                    cv_rows.append({"Model": "Linear", f"CV RMSE mean (k={k_folds}×{repeats})": s.mean(), "std": s.std()})
+                    cv_rows.append(
+                        {
+                            "Model": "Linear",
+                            f"CV RMSE mean (k={k_folds}×{repeats})": s.mean(),
+                            "std": s.std(),
+                        }
+                    )
                 if use_ridge:
-                    s = cv_rmse(Pipeline([("scaler", StandardScaler()), ("m", Ridge(alpha=ridge_a))]))
-                    cv_rows.append({"Model": f"Ridge (α={ridge_a:g})", f"CV RMSE mean (k={k_folds}×{repeats})": s.mean(), "std": s.std()})
+                    s = cv_rmse(
+                        Pipeline([("scaler", StandardScaler()), ("m", Ridge(alpha=ridge_a))])
+                    )
+                    cv_rows.append(
+                        {
+                            "Model": f"Ridge (α={ridge_a:g})",
+                            f"CV RMSE mean (k={k_folds}×{repeats})": s.mean(),
+                            "std": s.std(),
+                        }
+                    )
                 if use_lasso:
-                    s = cv_rmse(Pipeline([("scaler", StandardScaler()), ("m", Lasso(alpha=lasso_a, max_iter=10000))]))
-                    cv_rows.append({"Model": f"Lasso (α={lasso_a:g})", f"CV RMSE mean (k={k_folds}×{repeats})": s.mean(), "std": s.std()})
+                    s = cv_rmse(
+                        Pipeline(
+                            [
+                                ("scaler", StandardScaler()),
+                                ("m", Lasso(alpha=lasso_a, max_iter=10000)),
+                            ]
+                        )
+                    )
+                    cv_rows.append(
+                        {
+                            "Model": f"Lasso (α={lasso_a:g})",
+                            f"CV RMSE mean (k={k_folds}×{repeats})": s.mean(),
+                            "std": s.std(),
+                        }
+                    )
 
                 if cv_rows:
                     cv_df = pd.DataFrame(cv_rows)
-                    st.dataframe(cv_df.style.format({cv_df.columns[1]: "{:.3f}", "std": "{:.3f}"}), width="stretch")
+                    st.dataframe(
+                        cv_df.style.format({cv_df.columns[1]: "{:.3f}", "std": "{:.3f}"}),
+                        width="stretch",
+                    )
                     export_files["cv_results.csv"] = df_csv_str(cv_df)
 
                 # Hyperparameter sweeps (Ridge/Lasso)
                 if do_sweep and (use_ridge or use_lasso):
+
                     def sweep_alphas(model_name):
                         alphas = np.logspace(-3, 3, 20)
                         means, stds = [], []
                         for a in alphas:
                             if model_name == "ridge":
-                                pipe = Pipeline([("scaler", StandardScaler()), ("m", Ridge(alpha=a))])
+                                pipe = Pipeline(
+                                    [("scaler", StandardScaler()), ("m", Ridge(alpha=a))]
+                                )
                             else:
-                                pipe = Pipeline([("scaler", StandardScaler()), ("m", Lasso(alpha=a, max_iter=10000))])
-                            scores = cross_val_score(pipe, X, y, scoring="neg_root_mean_squared_error", cv=cv)
+                                pipe = Pipeline(
+                                    [
+                                        ("scaler", StandardScaler()),
+                                        ("m", Lasso(alpha=a, max_iter=10000)),
+                                    ]
+                                )
+                            scores = cross_val_score(
+                                pipe, X, y, scoring="neg_root_mean_squared_error", cv=cv
+                            )
                             rmse_vals = -scores
-                            means.append(rmse_vals.mean()); stds.append(rmse_vals.std())
+                            means.append(rmse_vals.mean())
+                            stds.append(rmse_vals.std())
                         return alphas, np.array(means), np.array(stds)
 
                     if use_ridge:
                         al, m, sdev = sweep_alphas("ridge")
                         fig_rs, ax_rs = plt.subplots()
-                        ax_rs.semilogx(al, m); ax_rs.fill_between(al, m - sdev, m + sdev, alpha=0.2)
-                        ax_rs.set_xlabel("Ridge α (log)"); ax_rs.set_ylabel("CV RMSE")
+                        ax_rs.semilogx(al, m)
+                        ax_rs.fill_between(al, m - sdev, m + sdev, alpha=0.2)
+                        ax_rs.set_xlabel("Ridge α (log)")
+                        ax_rs.set_ylabel("CV RMSE")
                         st.pyplot(fig_rs, width="stretch")
                         export_files["ridge_sweep.png"] = fig_png_bytes(fig_rs)
 
                     if use_lasso:
                         al, m, sdev = sweep_alphas("lasso")
                         fig_ls, ax_ls = plt.subplots()
-                        ax_ls.semilogx(al, m); ax_ls.fill_between(al, m - sdev, m + sdev, alpha=0.2)
-                        ax_ls.set_xlabel("Lasso α (log)"); ax_ls.set_ylabel("CV RMSE")
+                        ax_ls.semilogx(al, m)
+                        ax_ls.fill_between(al, m - sdev, m + sdev, alpha=0.2)
+                        ax_ls.set_xlabel("Lasso α (log)")
+                        ax_ls.set_ylabel("CV RMSE")
                         st.pyplot(fig_ls, width="stretch")
                         export_files["lasso_sweep.png"] = fig_png_bytes(fig_ls)
 
                 # Learning curve (bias–variance)
                 if primary == "linear":
-                    pipe_chosen = Pipeline([("scaler", StandardScaler()), ("m", LinearRegression())])
+                    pipe_chosen = Pipeline(
+                        [("scaler", StandardScaler()), ("m", LinearRegression())]
+                    )
                 elif primary == "ridge":
-                    pipe_chosen = Pipeline([("scaler", StandardScaler()), ("m", Ridge(alpha=ridge_a))])
+                    pipe_chosen = Pipeline(
+                        [("scaler", StandardScaler()), ("m", Ridge(alpha=ridge_a))]
+                    )
                 else:
-                    pipe_chosen = Pipeline([("scaler", StandardScaler()), ("m", Lasso(alpha=lasso_a, max_iter=10000))])
+                    pipe_chosen = Pipeline(
+                        [("scaler", StandardScaler()), ("m", Lasso(alpha=lasso_a, max_iter=10000))]
+                    )
 
                 kf = KFold(n_splits=int(k_folds), shuffle=True, random_state=seed)
                 train_sizes = np.linspace(0.2, 1.0, 6)
                 sizes, train_scores, val_scores = learning_curve(
-                    pipe_chosen, X, y,
+                    pipe_chosen,
+                    X,
+                    y,
                     cv=kf,
                     train_sizes=train_sizes,
                     scoring="neg_root_mean_squared_error",
                     shuffle=True,
-                    random_state=seed
+                    random_state=seed,
                 )
                 tr_rmse = (-train_scores).mean(axis=1)
                 val_rmse = (-val_scores).mean(axis=1)
                 fig_lv, ax_lv = plt.subplots()
                 ax_lv.plot(sizes * len(X), tr_rmse, marker="o", label="Train RMSE")
                 ax_lv.plot(sizes * len(X), val_rmse, marker="o", label="CV RMSE")
-                ax_lv.set_xlabel("Training examples"); ax_lv.set_ylabel("RMSE"); ax_lv.legend()
+                ax_lv.set_xlabel("Training examples")
+                ax_lv.set_ylabel("RMSE")
+                ax_lv.legend()
                 ax_lv.set_title("Bias–Variance (Learning Curve)")
                 st.pyplot(fig_lv, width="stretch")
                 export_files[f"learning_curve_{primary}.png"] = fig_png_bytes(fig_lv)
@@ -365,31 +513,42 @@ with tab2:
             # Permutation Importance (Top-K + error bars)
             with st.expander("🧪 Permutation Importance", expanded=False):
                 nrep = st.slider("Repeats", 2, 50, 10, step=1, key="pi_rep_reg")
-                run_pi = st.checkbox("Compute permutation importance", value=False, key="pi_run_reg")
+                run_pi = st.checkbox(
+                    "Compute permutation importance", value=False, key="pi_run_reg"
+                )
                 if run_pi:
                     with st.spinner("Computing feature importances..."):
                         pi = permutation_importance(
                             estimator=chosen["pipe"],
-                            X=X_test, y=y_test,
+                            X=X_test,
+                            y=y_test,
                             scoring="neg_root_mean_squared_error",
                             n_repeats=int(nrep),
-                            random_state=seed
+                            random_state=seed,
                         )
-                        imp = pd.DataFrame({
-                            "feature": X.columns,
-                            "importance": np.abs(pi.importances_mean),
-                            "std": pi.importances_std
-                        }).sort_values("importance", ascending=False)
+                        imp = pd.DataFrame(
+                            {
+                                "feature": X.columns,
+                                "importance": np.abs(pi.importances_mean),
+                                "std": pi.importances_std,
+                            }
+                        ).sort_values("importance", ascending=False)
                         kmax = max(1, min(15, len(imp)))
                         k = st.slider("Top-K features", 1, kmax, min(8, kmax), key="pi_topk_reg")
                         imp_k = imp.head(k).iloc[::-1]
-                        fig_pi, ax_pi = plt.subplots(figsize=(7, 0.45*len(imp_k)+1))
-                        ax_pi.barh(imp_k["feature"], imp_k["importance"], xerr=imp_k["std"], capsize=3)
+                        fig_pi, ax_pi = plt.subplots(figsize=(7, 0.45 * len(imp_k) + 1))
+                        ax_pi.barh(
+                            imp_k["feature"], imp_k["importance"], xerr=imp_k["std"], capsize=3
+                        )
                         ax_pi.set_xlabel("Permutation importance (|ΔRMSE|)")
                         ax_pi.set_ylabel("Feature")
                         st.pyplot(fig_pi, width="stretch")
-                        export_files[f"perm_importance_{primary}_top{k}.csv"] = df_csv_str(imp_k[::-1])
-                        export_files[f"perm_importance_{primary}_top{k}.png"] = fig_png_bytes(fig_pi)
+                        export_files[f"perm_importance_{primary}_top{k}.csv"] = df_csv_str(
+                            imp_k[::-1]
+                        )
+                        export_files[f"perm_importance_{primary}_top{k}.png"] = fig_png_bytes(
+                            fig_pi
+                        )
 
             # Partial Dependence (top-2 by |coef|)
             with st.expander("🧩 Partial Dependence (top-2 by |coef|)", expanded=False):
@@ -402,10 +561,14 @@ with tab2:
                         st.write(f"Top-2: **{top2_feats[0]}**, **{top2_feats[1]}**")
                         for f in top2_feats:
                             fig_pd, ax_pd = plt.subplots()
-                            PartialDependenceDisplay.from_estimator(chosen["pipe"], X, [f], ax=ax_pd)
+                            PartialDependenceDisplay.from_estimator(
+                                chosen["pipe"], X, [f], ax=ax_pd
+                            )
                             ax_pd.set_title(f"Partial dependence: {f}")
                             st.pyplot(fig_pd, width="stretch")
-                            export_files[f"partial_dependence_{primary}_{f}.png"] = fig_png_bytes(fig_pd)
+                            export_files[f"partial_dependence_{primary}_{f}.png"] = fig_png_bytes(
+                                fig_pd
+                            )
                     else:
                         st.info("Coefficients are all zero; PD not informative.")
                 else:
@@ -416,16 +579,22 @@ with tab2:
                 "task": "regression",
                 "dataset": {"rows": int(df.shape[0]), "cols": list(df.columns)},
                 "settings": {
-                    "test_size": float(test_size), "seed": int(seed),
-                    "use_linear": bool(use_lin), "use_ridge": bool(use_ridge), "use_lasso": bool(use_lasso),
-                    "ridge_alpha": float(ridge_a), "lasso_alpha": float(lasso_a),
-                    "primary_model": str(primary)
-                }
+                    "test_size": float(test_size),
+                    "seed": int(seed),
+                    "use_linear": bool(use_lin),
+                    "use_ridge": bool(use_ridge),
+                    "use_lasso": bool(use_lasso),
+                    "ridge_alpha": float(ridge_a),
+                    "lasso_alpha": float(lasso_a),
+                    "primary_model": str(primary),
+                },
             }
-            st.download_button("🧾 Download pipeline config (JSON)",
-                               data=json_str(pipeline_cfg),
-                               file_name="pipeline_config_regression.json",
-                               mime="application/json")
+            st.download_button(
+                "🧾 Download pipeline config (JSON)",
+                data=json_str(pipeline_cfg),
+                file_name="pipeline_config_regression.json",
+                mime="application/json",
+            )
             export_files["pipeline_config_regression.json"] = json_str(pipeline_cfg)
 
             # Export session (regression)
@@ -445,7 +614,7 @@ with tab2:
                     "📦 Download session (regression).zip",
                     data=mem.getvalue(),
                     file_name=f"boston_regression_session_{stamp}.zip",
-                    mime="application/zip"
+                    mime="application/zip",
                 )
 
             # Merge into global export
@@ -461,9 +630,12 @@ with tab3:
         X = df.drop(columns=["MEDV", "CAT. MEDV"])
         y = df["CAT. MEDV"]
 
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=seed)
-        clf = Pipeline([("scaler", StandardScaler()),
-                        ("m", LogisticRegression(max_iter=1000))]).fit(X_train, y_train)
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=test_size, random_state=seed
+        )
+        clf = Pipeline(
+            [("scaler", StandardScaler()), ("m", LogisticRegression(max_iter=1000))]
+        ).fit(X_train, y_train)
         y_pred = clf.predict(X_test)
         acc = float(accuracy_score(y_test, y_pred))
         st.metric("Accuracy", f"{acc:.3f}")
@@ -472,7 +644,8 @@ with tab3:
         cm = confusion_matrix(y_test, y_pred)
         fig_cm, ax = plt.subplots(figsize=(4, 4))
         im = ax.imshow(cm)
-        ax.set_xlabel("Predicted"); ax.set_ylabel("Actual")
+        ax.set_xlabel("Predicted")
+        ax.set_ylabel("Actual")
         for (i, j), v in np.ndenumerate(cm):
             ax.text(j, i, str(v), ha="center", va="center")
         fig_cm.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
@@ -485,21 +658,37 @@ with tab3:
         # CV accuracy quick panel
         cls_export = {}
         with st.expander("📚 Cross-Validation (Accuracy)"):
-            k_folds_c = st.number_input("K-Folds (classification)", 3, 20, 5, step=1, key="kfolds_cls")
-            repeats_c = st.number_input("Repeats (classification)", 1, 10, 1, step=1, key="repeats_cls")
-            cv_c = RepeatedKFold(n_splits=int(k_folds_c), n_repeats=int(repeats_c), random_state=seed)
+            k_folds_c = st.number_input(
+                "K-Folds (classification)", 3, 20, 5, step=1, key="kfolds_cls"
+            )
+            repeats_c = st.number_input(
+                "Repeats (classification)", 1, 10, 1, step=1, key="repeats_cls"
+            )
+            cv_c = RepeatedKFold(
+                n_splits=int(k_folds_c), n_repeats=int(repeats_c), random_state=seed
+            )
             scores = cross_val_score(
                 Pipeline([("scaler", StandardScaler()), ("m", LogisticRegression(max_iter=1000))]),
-                X, y, scoring="accuracy", cv=cv_c
+                X,
+                y,
+                scoring="accuracy",
+                cv=cv_c,
             )
             st.write(f"CV Accuracy mean±std: **{scores.mean():.3f} ± {scores.std():.3f}**")
-            cls_cv_df = pd.DataFrame({"metric": ["accuracy_mean", "accuracy_std"], "value": [scores.mean(), scores.std()]})
+            cls_cv_df = pd.DataFrame(
+                {
+                    "metric": ["accuracy_mean", "accuracy_std"],
+                    "value": [scores.mean(), scores.std()],
+                }
+            )
             cls_export["classification_cv_summary.csv"] = df_csv_str(cls_cv_df)
 
         # Predictions + metrics for export
         pred_df = pd.DataFrame({"y_true": y_test.values, "y_pred": y_pred})
         cls_export["classification_predictions.csv"] = df_csv_str(pred_df)
-        cls_export["classification_metrics.json"] = json_str({"accuracy": acc, "test_size": float(test_size), "seed": int(seed)})
+        cls_export["classification_metrics.json"] = json_str(
+            {"accuracy": acc, "test_size": float(test_size), "seed": int(seed)}
+        )
         cls_export["confusion_matrix.png"] = fig_png_bytes(fig_cm)
         cls_export["classification_report.txt"] = cls_report
 
@@ -511,40 +700,53 @@ with tab3:
                 with st.spinner("Computing feature importances..."):
                     pi = permutation_importance(
                         estimator=clf,
-                        X=X_test, y=y_test,
+                        X=X_test,
+                        y=y_test,
                         scoring="accuracy",
                         n_repeats=int(nrep_c),
-                        random_state=seed
+                        random_state=seed,
                     )
-                    imp = pd.DataFrame({
-                        "feature": X.columns,
-                        "importance": np.abs(pi.importances_mean),
-                        "std": pi.importances_std
-                    }).sort_values("importance", ascending=False)
+                    imp = pd.DataFrame(
+                        {
+                            "feature": X.columns,
+                            "importance": np.abs(pi.importances_mean),
+                            "std": pi.importances_std,
+                        }
+                    ).sort_values("importance", ascending=False)
                     kmax = max(1, min(15, len(imp)))
                     k = st.slider("Top-K features", 1, kmax, min(8, kmax), key="pi_topk_cls")
                     imp_k = imp.head(k).iloc[::-1]
-                    fig_pi_c, ax_pi_c = plt.subplots(figsize=(7, 0.45*len(imp_k)+1))
-                    ax_pi_c.barh(imp_k["feature"], imp_k["importance"], xerr=imp_k["std"], capsize=3)
+                    fig_pi_c, ax_pi_c = plt.subplots(figsize=(7, 0.45 * len(imp_k) + 1))
+                    ax_pi_c.barh(
+                        imp_k["feature"], imp_k["importance"], xerr=imp_k["std"], capsize=3
+                    )
                     ax_pi_c.set_xlabel("Permutation importance (ΔAccuracy)")
                     ax_pi_c.set_ylabel("Feature")
                     st.pyplot(fig_pi_c, width="stretch")
-                    cls_export[f"classification_perm_importance_top{k}.csv"] = df_csv_str(imp_k[::-1])
-                    cls_export[f"classification_perm_importance_top{k}.png"] = fig_png_bytes(fig_pi_c)
+                    cls_export[f"classification_perm_importance_top{k}.csv"] = df_csv_str(
+                        imp_k[::-1]
+                    )
+                    cls_export[f"classification_perm_importance_top{k}.png"] = fig_png_bytes(
+                        fig_pi_c
+                    )
 
         # Pipeline config JSON
         pipeline_cfg_cls = {
             "task": "classification",
             "dataset": {"rows": int(df.shape[0]), "cols": list(df.columns)},
             "settings": {
-                "test_size": float(test_size), "seed": int(seed),
-                "model": "logistic_regression", "max_iter": 1000
-            }
+                "test_size": float(test_size),
+                "seed": int(seed),
+                "model": "logistic_regression",
+                "max_iter": 1000,
+            },
         }
-        st.download_button("🧾 Download pipeline config (JSON)",
-                           data=json_str(pipeline_cfg_cls),
-                           file_name="pipeline_config_classification.json",
-                           mime="application/json")
+        st.download_button(
+            "🧾 Download pipeline config (JSON)",
+            data=json_str(pipeline_cfg_cls),
+            file_name="pipeline_config_classification.json",
+            mime="application/json",
+        )
         cls_export["pipeline_config_classification.json"] = json_str(pipeline_cfg_cls)
 
         # Export session (classification)
@@ -564,7 +766,7 @@ with tab3:
                 "📦 Download session (classification).zip",
                 data=mem.getvalue(),
                 file_name=f"boston_classification_session_{stamp}.zip",
-                mime="application/zip"
+                mime="application/zip",
             )
 
         # Merge into global export
@@ -580,25 +782,42 @@ with tab_nb:
     # Embedded sample notebook (small, synthetic)
     SAMPLE_NB = {
         "cells": [
-            {"cell_type": "markdown", "metadata": {}, "source": [
-                "# Sample Boston Housing Notebook\\n",
-                "Quick demo: load CSV and preview head.\\n"
-            ]},
-            {"cell_type": "code", "execution_count": None, "metadata": {}, "outputs": [], "source": [
-                "import pandas as pd\\n",
-                "df = pd.read_csv('BostonHousing.csv')\\n",
-                "df.head()\\n"
-            ]},
+            {
+                "cell_type": "markdown",
+                "metadata": {},
+                "source": [
+                    "# Sample Boston Housing Notebook\\n",
+                    "Quick demo: load CSV and preview head.\\n",
+                ],
+            },
+            {
+                "cell_type": "code",
+                "execution_count": None,
+                "metadata": {},
+                "outputs": [],
+                "source": [
+                    "import pandas as pd\\n",
+                    "df = pd.read_csv('BostonHousing.csv')\\n",
+                    "df.head()\\n",
+                ],
+            },
         ],
-        "metadata": {"kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"}},
-        "nbformat": 4, "nbformat_minor": 5
+        "metadata": {
+            "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"}
+        },
+        "nbformat": 4,
+        "nbformat_minor": 5,
     }
     sample_bytes = json.dumps(SAMPLE_NB, indent=2).encode("utf-8")
 
     cleft, cright = st.columns(2)
     with cleft:
-        st.download_button("📥 Download sample notebook", data=sample_bytes,
-                           file_name="sample_boston_notebook.ipynb", mime="application/x-ipynb+json")
+        st.download_button(
+            "📥 Download sample notebook",
+            data=sample_bytes,
+            file_name="sample_boston_notebook.ipynb",
+            mime="application/x-ipynb+json",
+        )
     with cright:
         render_sample = st.button("👀 Render embedded sample now")
 
@@ -608,6 +827,7 @@ with tab_nb:
         try:
             import nbformat
             from nbconvert import HTMLExporter
+
             nb = nbformat.reads(nb_json_str, as_version=4)
             html_exporter = HTMLExporter()
             html_exporter.exclude_input = False
@@ -641,12 +861,118 @@ if st.button("📦 Download EVERYTHING (.zip)"):
                 else:
                     zf.writestr(arc, payload.encode("utf-8"))
     mem.seek(0)
-    st.download_button("⬇️ Export ALL (EDA+Regression+Classification).zip",
-                       data=mem.getvalue(),
-                       file_name=f"boston_full_session_{stamp}.zip",
-                       mime="application/zip")
+    st.download_button(
+        "⬇️ Export ALL (EDA+Regression+Classification).zip",
+        data=mem.getvalue(),
+        file_name=f"boston_full_session_{stamp}.zip",
+        mime="application/zip",
+    )
 
 # Build/version footer
-from datetime import datetime, timezone
-build_ts = datetime.fromtimestamp(Path(__file__).stat().st_mtime, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+from datetime import UTC, datetime
+
+build_ts = datetime.fromtimestamp(Path(__file__).stat().st_mtime, tz=UTC).strftime(
+    "%Y-%m-%d %H:%M UTC"
+)
 st.caption(f"Build: {build_ts} • Streamlit {st.__version__}")
+
+
+# --- Schema guard helper
+def _check_schema(df):
+    import pandas as _pd
+    from pandas.api.types import is_numeric_dtype as _isnum
+
+    REQUIRED = {"MEDV", "CAT. MEDV"}
+    problems = []
+    missing = REQUIRED - set(df.columns)
+    if missing:
+        problems.append(f"Missing required columns: {sorted(missing)}")
+    else:
+        if not _isnum(df["MEDV"]):
+            problems.append("MEDV must be numeric.")
+        if not _isnum(df["CAT. MEDV"]):
+            problems.append("CAT. MEDV must be numeric with values 0/1.")
+        else:
+            bad = set(_pd.unique(df["CAT. MEDV"])) - {0, 1}
+            if bad:
+                problems.append(f"CAT. MEDV should be 0/1 only; found {sorted(list(bad))[:8]}")
+    na_cells = int(df.isna().sum().sum())
+    if na_cells > 0:
+        st.warning(
+            f"Dataset contains **{na_cells}** missing cells. Consider cleaning; models assume complete cases."
+        )
+    if problems:
+        st.error("**Dataset schema check failed:**\n- " + "\n- ".join(problems))
+        st.stop()
+
+
+# ====================== Reproduce run bundle ======================
+import hashlib
+import platform
+import sys
+import time as _time
+
+import matplotlib as _mpl
+import numpy
+import pandas as _pandas
+import sklearn as _sklearn
+import streamlit as _st
+
+
+def _sha256_bytes(b: bytes) -> str:
+    return hashlib.sha256(b).hexdigest()
+
+
+try:
+    _ds_fingerprint = None
+    _ds_source = "uploaded"
+    _sample_path = Path(__file__).resolve().parent / "BostonHousing.csv"
+    if uploaded is None and _sample_path.exists():
+        _ds_fingerprint = _sha256_bytes(_sample_path.read_bytes())
+        _ds_source = "repo/BostonHousing.csv"
+    else:
+        _head_csv = df.head(100).to_csv(index=False).encode("utf-8")
+        _ds_fingerprint = _sha256_bytes(_head_csv)
+except Exception:
+    _ds_fingerprint = None
+
+_reproduce = {
+    "timestamp_utc": _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime()),
+    "python": sys.version.split()[0],
+    "platform": platform.platform(),
+    "deps": {
+        "numpy": numpy.__version__,
+        "pandas": _pandas.__version__,
+        "scikit_learn": _sklearn.__version__,
+        "streamlit": _st.__version__,
+        "matplotlib": _mpl.__version__,
+    },
+    "dataset": {
+        "shape": [int(df.shape[0]), int(df.shape[1])],
+        "columns": list(df.columns),
+        "source": _ds_source,
+        "fingerprint_sha256": _ds_fingerprint,
+    },
+    "settings": {
+        "test_size": float(st.session_state.get("test_size", 0.2)),
+        "seed": int(st.session_state.get("seed", 42)),
+    },
+    "regression": {
+        "use_linear": bool(st.session_state.get("use_lin", True)),
+        "use_ridge": bool(st.session_state.get("use_ridge", True)),
+        "use_lasso": bool(st.session_state.get("use_lasso", True)),
+        "ridge_alpha": float(st.session_state.get("ridge_a", 1.0)),
+        "lasso_alpha": float(st.session_state.get("lasso_a", 0.1)),
+        "primary_model": str(st.session_state.get("primary_reg", "linear")),
+    },
+    "classification": {"model": "logistic_regression", "max_iter": 1000},
+}
+_repro_json = json_str(_reproduce)
+st.download_button(
+    "?? Download reproduce.json",
+    data=_repro_json,
+    file_name="reproduce.json",
+    mime="application/json",
+)
+st.session_state.setdefault("exports", {}).setdefault("meta", {})
+st.session_state["exports"]["meta"]["reproduce.json"] = _repro_json

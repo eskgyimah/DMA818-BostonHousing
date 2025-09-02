@@ -19,3 +19,4 @@ Interactive EDA + Regression + Classification for the Boston Housing dataset.
 
 [?? Open the app](https://dma818-bostonhousing-a7sxfoly9ssrmqpzdbioqk.streamlit.app/)
 
+![Release](https://img.shields.io/github/v/release/eskgyimah/DMA818-BostonHousing?display_name=tag)

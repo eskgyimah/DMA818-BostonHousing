@@ -5,10 +5,10 @@ target-version = ["py313"]
 [tool.ruff]
 line-length = 100
 target-version = "py313"
+
+[tool.ruff.lint]
 select = ["E","F","I","B","UP","ICN","ARG","SIM","C4","PL","NPY"]
-ignore = [
-  "E203",  # black compatibility on slice spacing
-]
-[tool.ruff.isort]
+ignore = ["E203","PLR0915","E501","E702","E701","E402","ICN001","C414"]
+
+[tool.ruff.lint.isort]
 known-first-party = ["streamlit_app"]
-profile = "black"
