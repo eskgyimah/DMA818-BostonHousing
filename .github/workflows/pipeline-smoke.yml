@@ -1,0 +1,22 @@
+name: pipeline-smoke
+on:
+  push: { branches: [ main ] }
+  pull_request: { branches: [ main ] }
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Install deps
+        run: |
+          python -m pip install -U pip
+          pip install -r requirements.txt
+      - name: Run pipeline
+        run: python dma818_pipeline.py --data BostonHousing.csv > run.json
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-run
+          path: run.json
