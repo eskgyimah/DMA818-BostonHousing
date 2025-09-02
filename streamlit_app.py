@@ -778,6 +778,19 @@ with tab3:
 # ====================== Notebook Viewer ======================
 with tab_nb:
     st.subheader("Notebook Viewer")
+# Term paper downloads (if present)
+from pathlib import Path as _P
+
+for _name in ("Edward_Gyimah.ipynb", "Edward_Gyimah.html"):
+    _p = _P(__file__).with_name(_name)
+    _p = _p if _p.exists() else (_P(__file__).resolve().parent / "assets" / _name)
+    if _p.exists():
+        st.download_button(
+            f"?? Download {_name}",
+            data=_p.read_bytes(),
+            file_name=_name,
+            mime=("application/x-ipynb+json" if _name.endswith(".ipynb") else "text/html"),
+        )
 
     # Embedded sample notebook (small, synthetic)
     SAMPLE_NB = {

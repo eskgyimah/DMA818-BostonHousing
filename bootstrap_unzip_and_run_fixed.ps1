@@ -95,7 +95,7 @@ jobs:
 }
 
 # --- app.json (via ConvertTo-Json for safety) ---
-$app = @{ 
+$app = @{
   name = $HerokuApp
   description = "DMA818 — Boston Housing Streamlit app"
   repository = "https://github.com/eskgyimah/DMA818-BostonHousing"
