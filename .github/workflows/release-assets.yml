@@ -1,0 +1,32 @@
+﻿name: "Release: attach term-paper assets"
+on:
+  push:
+    tags:
+      - "v*"
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Collect assets if present
+        shell: bash
+        run: |
+          set -e
+          mkdir -p rel
+          for f in Edward_Gyimah.ipynb assets/Edward_Gyimah.ipynb Edward_Gyimah.html assets/Edward_Gyimah.html; do
+            if [ -f "$f" ]; then cp "$f" rel/; fi
+          done
+          echo "Collected:"; ls -la rel || true
+      - name: Attach to GitHub Release
+        if: ${{ hashFiles('rel/**') != '' }}
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: rel/**
