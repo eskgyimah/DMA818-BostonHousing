@@ -22,6 +22,27 @@ st.set_page_config(page_title="DMA818 — Boston Housing", layout="wide")
 st.title("DMA818 — Boston Housing Interactive App")
 st.caption("EDA • Regression (Linear/Ridge/Lasso) • Classification (Logistic) — Matplotlib visuals only")
 
+# --- Shareable URL widget (copies current URL incl. query params) ---
+st.html("""
+<div style="display:flex;gap:8px;align-items:center;margin:6px 0 18px 0;">
+  <input id="shareurl" style="flex:1;padding:8px;border:1px solid #ccc;border-radius:6px" />
+  <button id="copybtn" style="padding:8px 12px;border-radius:6px;border:1px solid #ddd;cursor:pointer">
+    Copy URL
+  </button>
+</div>
+<script>
+const i = document.getElementById('shareurl');
+const b = document.getElementById('copybtn');
+const set = () => { try { i.value = window.location.href; } catch(e){} };
+set();
+b.onclick = async () => {
+  try { await navigator.clipboard.writeText(window.location.href); b.textContent = "Copied!"; setTimeout(()=>b.textContent="Copy URL", 1200); }
+  catch(e){ i.select(); document.execCommand('copy'); b.textContent="Copied!"; setTimeout(()=>b.textContent="Copy URL",1200); }
+};
+</script>
+""")
+
+
 # ---------------------- Helpers ----------------------
 def _qp_get(key, default, cast):
     """Query-param getter with Streamlit new/legacy API support."""
@@ -497,3 +518,8 @@ with tab3:
             )
     else:
         st.warning("Columns MEDV and CAT. MEDV are required.")
+        # --- Build footer ---
+        from datetime import datetime, timezone
+        build_ts = datetime.fromtimestamp(Path(__file__).stat().st_mtime, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        st.caption(f"Build: {build_ts} • Streamlit {st.__version__}")
+
