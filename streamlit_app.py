@@ -104,7 +104,7 @@ _qp_set(ts=test_size, seed=seed)
 
 tab1, tab2, tab3 = st.tabs(["📊 EDA", "📈 Regression (MEDV)", "🎯 Classification (CAT.MEDV)"])
 
-# ---------------------- EDA ----------------------
+# ====================== EDA ======================
 with tab1:
     st.subheader("Overview")
     st.dataframe(df.head(20), use_container_width=True)
@@ -122,15 +122,35 @@ with tab1:
         fig.colorbar(im)
         st.pyplot(fig, use_container_width=True)
 
-    # MEDV histogram
-    if "MEDV" in df.columns:
-        st.subheader("MEDV Distribution")
-        fig2, ax2 = plt.subplots(figsize=(6, 4))
-        ax2.hist(df["MEDV"].values, bins=30)
-        ax2.set_xlabel("MEDV"); ax2.set_ylabel("Frequency")
-        st.pyplot(fig2, use_container_width=True)
+    # Feature signals: variance + |corr with MEDV|
+    st.subheader("Feature Signals")
+    num_df = df.select_dtypes(include=[np.number])
+    signals_cols = st.columns(2)
+    # Variance (unsupervised)
+    with signals_cols[0]:
+        if not num_df.empty:
+            var_series = num_df.var().sort_values(ascending=False)
+            fig_v, ax_v = plt.subplots(figsize=(6, 5))
+            ax_v.barh(var_series.index[::-1], var_series.values[::-1])
+            ax_v.set_xlabel("Variance"); ax_v.set_ylabel("Feature"); ax_v.set_title("Feature Variance")
+            st.pyplot(fig_v, use_container_width=True)
+            st.download_button("📥 Download variance (CSV)", df_csv_str(var_series.reset_index(names=["feature", "variance"])),
+                               file_name="eda_variance.csv", mime="text/csv")
+    # |corr with MEDV| (supervised proxy)
+    with signals_cols[1]:
+        if "MEDV" in df.columns:
+            corr_target = num_df.drop(columns=["MEDV"], errors="ignore").corrwith(df["MEDV"]).abs().sort_values(ascending=False)
+            corr_df = corr_target.reset_index().rename(columns={"index": "feature", 0: "abs_corr_with_MEDV"})
+            fig_c, ax_c = plt.subplots(figsize=(6, 5))
+            ax_c.barh(corr_target.index[::-1], corr_target.values[::-1])
+            ax_c.set_xlabel("|corr|"); ax_c.set_ylabel("Feature"); ax_c.set_title("|Correlation| with MEDV")
+            st.pyplot(fig_c, use_container_width=True)
+            st.download_button("📥 Download |corr(MEDV)| (CSV)", df_csv_str(corr_df),
+                               file_name="eda_abs_corr_MEDV.csv", mime="text/csv")
+        else:
+            st.info("MEDV not found — correlation-to-target panel hidden.")
 
-# ---------------------- Regression (Linear/Ridge/Lasso) ----------------------
+# ====================== Regression (Linear/Ridge/Lasso) ======================
 with tab2:
     st.subheader("Regression — Predict MEDV")
     if all(c in df.columns for c in ["MEDV", "CAT. MEDV"]):
@@ -174,7 +194,6 @@ with tab2:
         if use_lasso:
             results.append(eval_model(Pipeline([("scaler", StandardScaler()), ("m", Lasso(alpha=lasso_a, max_iter=10000))]), "lasso"))
 
-        # Storage for exports
         export_files = {}  # name -> bytes/str
 
         if not results:
@@ -185,7 +204,7 @@ with tab2:
             st.dataframe(met.style.format({"RMSE": "{:.3f}", "R²": "{:.3f}"}), use_container_width=True)
             export_files["regression_comparison.csv"] = df_csv_str(met)
 
-            # Pick primary for plots
+            # Pick primary model
             allowed = [r["model"] for r in results]
             if primary not in allowed: primary = allowed[0]
             primary = st.radio("Inspect model", allowed, index=allowed.index(primary), horizontal=True, key="primary_reg")
@@ -210,7 +229,7 @@ with tab2:
                 "ridge_alpha": float(ridge_a), "lasso_alpha": float(lasso_a)
             })
 
-            # ---------------------- CV & sweeps & learning curve ----------------------
+            # ---- CV / Sweeps / Learning curve (same as before) ----
             with st.expander("📚 Cross-Validation • Hyperparameter Sweeps • Bias–Variance", expanded=False):
                 ccv1, ccv2, ccv3 = st.columns([1,1,1])
                 with ccv1:
@@ -224,7 +243,7 @@ with tab2:
 
                 def cv_rmse(pipe):
                     scores = cross_val_score(pipe, X, y, scoring="neg_root_mean_squared_error", cv=cv)
-                    return -scores  # RMSE positive
+                    return -scores
 
                 cv_rows = []
                 if use_lin:
@@ -242,8 +261,7 @@ with tab2:
                     st.dataframe(cv_df.style.format({cv_df.columns[1]: "{:.3f}", "std": "{:.3f}"}), use_container_width=True)
                     export_files["cv_results.csv"] = df_csv_str(cv_df)
 
-                # Hyperparameter sweeps
-                ridge_fig = lasso_fig = None
+                # Sweeps
                 if do_sweep and (use_ridge or use_lasso):
                     def sweep_alphas(model_name):
                         alphas = np.logspace(-3, 3, 20)
@@ -258,29 +276,23 @@ with tab2:
                             means.append(rmse_vals.mean()); stds.append(rmse_vals.std())
                         return alphas, np.array(means), np.array(stds)
 
-                    cols = st.columns(2) if (use_ridge and use_lasso) else st.columns(1)
                     if use_ridge:
-                        with cols[0]:
-                            al, m, sdev = sweep_alphas("ridge")
-                            ridge_fig, ax_s = plt.subplots()
-                            ax_s.semilogx(al, m)
-                            ax_s.fill_between(al, m - sdev, m + sdev, alpha=0.2)
-                            ax_s.set_xlabel("Ridge α (log)"); ax_s.set_ylabel("CV RMSE")
-                            st.pyplot(ridge_fig, use_container_width=True)
-                            export_files["ridge_sweep.png"] = fig_png_bytes(ridge_fig)
+                        al, m, sdev = sweep_alphas("ridge")
+                        fig_rs, ax_rs = plt.subplots()
+                        ax_rs.semilogx(al, m); ax_rs.fill_between(al, m - sdev, m + sdev, alpha=0.2)
+                        ax_rs.set_xlabel("Ridge α (log)"); ax_rs.set_ylabel("CV RMSE")
+                        st.pyplot(fig_rs, use_container_width=True)
+                        export_files["ridge_sweep.png"] = fig_png_bytes(fig_rs)
 
                     if use_lasso:
-                        target_col = cols[1] if (use_ridge and use_lasso) else cols[0]
-                        with target_col:
-                            al, m, sdev = sweep_alphas("lasso")
-                            lasso_fig, ax_s2 = plt.subplots()
-                            ax_s2.semilogx(al, m)
-                            ax_s2.fill_between(al, m - sdev, m + sdev, alpha=0.2)
-                            ax_s2.set_xlabel("Lasso α (log)"); ax_s2.set_ylabel("CV RMSE")
-                            st.pyplot(lasso_fig, use_container_width=True)
-                            export_files["lasso_sweep.png"] = fig_png_bytes(lasso_fig)
+                        al, m, sdev = sweep_alphas("lasso")
+                        fig_ls, ax_ls = plt.subplots()
+                        ax_ls.semilogx(al, m); ax_ls.fill_between(al, m - sdev, m + sdev, alpha=0.2)
+                        ax_ls.set_xlabel("Lasso α (log)"); ax_ls.set_ylabel("CV RMSE")
+                        st.pyplot(fig_ls, use_container_width=True)
+                        export_files["lasso_sweep.png"] = fig_png_bytes(fig_ls)
 
-                # Learning curve (bias–variance)
+                # Learning curve
                 if primary == "linear":
                     pipe_chosen = Pipeline([("scaler", StandardScaler()), ("m", LinearRegression())])
                 elif primary == "ridge":
@@ -298,22 +310,17 @@ with tab2:
                     shuffle=True,
                     random_state=seed
                 )
-
-                # learning_curve returns negative RMSE; negate to get RMSE
                 tr_rmse = (-train_scores).mean(axis=1)
                 val_rmse = (-val_scores).mean(axis=1)
-
                 fig_lv, ax_lv = plt.subplots()
                 ax_lv.plot(sizes * len(X), tr_rmse, marker="o", label="Train RMSE")
                 ax_lv.plot(sizes * len(X), val_rmse, marker="o", label="CV RMSE")
-                ax_lv.set_xlabel("Training examples")
-                ax_lv.set_ylabel("RMSE")
-                ax_lv.legend()
+                ax_lv.set_xlabel("Training examples"); ax_lv.set_ylabel("RMSE"); ax_lv.legend()
                 ax_lv.set_title("Bias–Variance (Learning Curve)")
                 st.pyplot(fig_lv, use_container_width=True)
                 export_files[f"learning_curve_{primary}.png"] = fig_png_bytes(fig_lv)
 
-            # ---------------------- Permutation Importance ----------------------
+            # Permutation Importance (regression)
             with st.expander("🧪 Permutation Importance", expanded=False):
                 nrep = st.slider("Repeats", 2, 50, 10, step=1, key="pi_rep_reg")
                 run_pi = st.checkbox("Compute permutation importance", value=False, key="pi_run_reg")
@@ -326,24 +333,35 @@ with tab2:
                             n_repeats=int(nrep),
                             random_state=seed
                         )
-                        # Importance as positive numbers (higher = more important)
                         imp = pd.DataFrame({
                             "feature": X.columns,
                             "importance": np.abs(pi.importances_mean),
                             "std": pi.importances_std
                         }).sort_values("importance", ascending=False)
                         st.dataframe(imp, use_container_width=True)
-
-                        # Bar plot
                         fig_pi, ax_pi = plt.subplots(figsize=(7, 5))
                         ax_pi.barh(imp["feature"], imp["importance"])
-                        ax_pi.invert_yaxis()
-                        ax_pi.set_xlabel("Permutation importance (|ΔRMSE|)")
+                        ax_pi.invert_yaxis(); ax_pi.set_xlabel("Permutation importance (|ΔRMSE|)")
                         st.pyplot(fig_pi, use_container_width=True)
-
-                        # Exports
                         export_files[f"perm_importance_{primary}.csv"] = df_csv_str(imp)
                         export_files[f"perm_importance_{primary}.png"] = fig_png_bytes(fig_pi)
+
+            # -------- Pipeline config export (JSON) --------
+            pipeline_cfg = {
+                "task": "regression",
+                "dataset": {"rows": int(df.shape[0]), "cols": list(df.columns)},
+                "settings": {
+                    "test_size": float(test_size), "seed": int(seed),
+                    "use_linear": bool(use_lin), "use_ridge": bool(use_ridge), "use_lasso": bool(use_lasso),
+                    "ridge_alpha": float(ridge_a), "lasso_alpha": float(lasso_a),
+                    "primary_model": str(primary)
+                }
+            }
+            st.download_button("🧾 Download pipeline config (JSON)",
+                               data=json_str(pipeline_cfg),
+                               file_name="pipeline_config_regression.json",
+                               mime="application/json")
+            export_files["pipeline_config_regression.json"] = json_str(pipeline_cfg)
 
             # ---------------------- Export session (.zip) ----------------------
             st.divider()
@@ -367,7 +385,7 @@ with tab2:
     else:
         st.warning("Columns MEDV and CAT. MEDV are required.")
 
-# ---------------------- Classification (Logistic) ----------------------
+# ====================== Classification (Logistic) ======================
 with tab3:
     st.subheader("Logistic Regression — Predict CAT.MEDV")
     if all(c in df.columns for c in ["MEDV", "CAT. MEDV"]):
@@ -381,7 +399,7 @@ with tab3:
         acc = float(accuracy_score(y_test, y_pred))
         st.metric("Accuracy", f"{acc:.3f}")
 
-        # Confusion matrix figure
+        # Confusion matrix
         cm = confusion_matrix(y_test, y_pred)
         fig_cm, ax = plt.subplots(figsize=(4, 4))
         im = ax.imshow(cm)
@@ -391,12 +409,11 @@ with tab3:
         fig_cm.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
         st.pyplot(fig_cm)
 
-        # Text report
         st.text("Classification Report")
         cls_report = classification_report(y_test, y_pred)
         st.text(cls_report)
 
-        # CV accuracy quick panel
+        # CV (accuracy)
         cls_export = {}
         with st.expander("📚 Cross-Validation (Accuracy)"):
             k_folds_c = st.number_input("K-Folds (classification)", 3, 20, 5, step=1, key="kfolds_cls")
@@ -410,7 +427,7 @@ with tab3:
             cls_cv_df = pd.DataFrame({"metric": ["accuracy_mean", "accuracy_std"], "value": [scores.mean(), scores.std()]})
             cls_export["classification_cv_summary.csv"] = df_csv_str(cls_cv_df)
 
-        # Predictions + metrics for export
+        # Predictions + metrics
         pred_df = pd.DataFrame({"y_true": y_test.values, "y_pred": y_pred})
         cls_export["classification_predictions.csv"] = df_csv_str(pred_df)
         cls_export["classification_metrics.json"] = json_str({"accuracy": acc, "test_size": float(test_size), "seed": int(seed)})
@@ -436,16 +453,30 @@ with tab3:
                         "std": pi.importances_std
                     }).sort_values("importance", ascending=False)
                     st.dataframe(imp, use_container_width=True)
-
                     fig_pi_c, ax_pi_c = plt.subplots(figsize=(7, 5))
                     ax_pi_c.barh(imp["feature"], imp["importance"])
                     ax_pi_c.invert_yaxis()
                     ax_pi_c.set_xlabel("Permutation importance (ΔAccuracy)")
                     st.pyplot(fig_pi_c, use_container_width=True)
-
                     cls_export["classification_perm_importance.csv"] = df_csv_str(imp)
                     cls_export["classification_perm_importance.png"] = fig_png_bytes(fig_pi_c)
 
+        # -------- Pipeline config export (JSON) --------
+        pipeline_cfg_cls = {
+            "task": "classification",
+            "dataset": {"rows": int(df.shape[0]), "cols": list(df.columns)},
+            "settings": {
+                "test_size": float(test_size), "seed": int(seed),
+                "model": "logistic_regression", "max_iter": 1000
+            }
+        }
+        st.download_button("🧾 Download pipeline config (JSON)",
+                           data=json_str(pipeline_cfg_cls),
+                           file_name="pipeline_config_classification.json",
+                           mime="application/json")
+        cls_export["pipeline_config_classification.json"] = json_str(pipeline_cfg_cls)
+
+        # Export session zip
         st.divider()
         if st.button("🗂️ Build export (.zip)", key="zip_cls"):
             mem = io.BytesIO()

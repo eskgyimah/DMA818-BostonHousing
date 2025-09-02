@@ -25,3 +25,4 @@ build/
 Thumbs.db
 # Reports/exports (kept tracked by LFS, but ignore raw intermediates)
 *.nbconvert.ipynb
+.vs/
