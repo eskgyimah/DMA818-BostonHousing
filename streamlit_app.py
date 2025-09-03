@@ -147,6 +147,7 @@ if sample_path.exists():
         "⬇️ Download sample BostonHousing.csv",
         data=sample_path.read_bytes(),
         file_name="BostonHousing.csv",
+        key="dl-BostonHousing.csv",
         mime="text/csv",
     )
 
@@ -211,6 +212,7 @@ with tab1:
                 "📥 Download variance (CSV)",
                 df_csv_str(var_df),
                 file_name="eda_variance.csv",
+                key="dl-eda_variance.csv",
                 mime="text/csv",
             )
             st.session_state["exports"]["eda"]["eda_variance.csv"] = df_csv_str(var_df)
@@ -237,6 +239,7 @@ with tab1:
                 "📥 Download |corr(MEDV)| (CSV)",
                 df_csv_str(corr_df),
                 file_name="eda_abs_corr_MEDV.csv",
+                key="dl-eda_abs_corr_MEDV.csv",
                 mime="text/csv",
             )
             st.session_state["exports"]["eda"]["eda_abs_corr_MEDV.csv"] = df_csv_str(corr_df)
@@ -595,6 +598,7 @@ with tab2:
                 "🧾 Download pipeline config (JSON)",
                 data=json_str(pipeline_cfg),
                 file_name="pipeline_config_regression.json",
+                key="dl-pipeline_config_regression.json",
                 mime="application/json",
             )
             export_files["pipeline_config_regression.json"] = json_str(pipeline_cfg)
@@ -747,6 +751,7 @@ with tab3:
             "🧾 Download pipeline config (JSON)",
             data=json_str(pipeline_cfg_cls),
             file_name="pipeline_config_classification.json",
+            key="dl-pipeline_config_classification.json",
             mime="application/json",
         )
         cls_export["pipeline_config_classification.json"] = json_str(pipeline_cfg_cls)
@@ -791,6 +796,7 @@ for _name in ("Edward_Gyimah.ipynb", "Edward_Gyimah.html"):
             f"?? Download {_name}",
             data=_p.read_bytes(),
             file_name=_name,
+            key=f"dl-{_name}",
             mime=("application/x-ipynb+json" if _name.endswith(".ipynb") else "text/html"),
         )
 
@@ -831,6 +837,7 @@ for _name in ("Edward_Gyimah.ipynb", "Edward_Gyimah.html"):
             "📥 Download sample notebook",
             data=sample_bytes,
             file_name="sample_boston_notebook.ipynb",
+            key="dl-sample_boston_notebook.ipynb",
             mime="application/x-ipynb+json",
         )
     with cright:
@@ -987,6 +994,7 @@ st.download_button(
     "?? Download reproduce.json",
     data=_repro_json,
     file_name="reproduce.json",
+    key="dl-reproduce.json",
     mime="application/json",
 )
 st.session_state.setdefault("exports", {}).setdefault("meta", {})
