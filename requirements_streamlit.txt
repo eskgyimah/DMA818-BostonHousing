@@ -25,3 +25,5 @@ nbconvert>=7.2
 nbformat>=5.9
 
 scipy==1.13.1
+
+# rebuild 2025-09-03T17:05:07
