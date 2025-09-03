@@ -39,3 +39,6 @@ Edward_Gyimah.py
 
 # ignore local tree dumps
 DMA818ProjectWork
+
+# ignore local exports
+tmp_nb.html
