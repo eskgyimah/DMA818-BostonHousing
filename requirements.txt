@@ -1,24 +1,20 @@
 --only-binary=:all:
 pandas==2.3.2
-numpy==2.1.3
+numpy>=2.1,<3
 scikit-learn==1.5.2
-matplotlib==3.8.4
+matplotlib==3.10.6
 seaborn==0.13.2
 streamlit==1.36.0
 plotly==5.22.0
 # fix notebook render (MathBlockParser/parse_axt_heading)
 markdown-it-py>=3.0.0
 mdit-py-plugins>=0.4.0
-\
-# rebuild bump 2025-09-02T23:47:32\
-\
-# rebuild bump 2025-09-02T23:51:37\
-\
+# rebuild bump 2025-09-02T23:47:32
+# rebuild bump 2025-09-02T23:51:37
 markdown-it-py>=3.0.0
-\
 mdit-py-plugins>=0.4.0
 mistune==2.0.5
 nbconvert>=7.2
 nbformat>=5.9
 -r requirements_streamlit.txt
-scipy==1.13.1
+scipy>=1.14,<1.15
