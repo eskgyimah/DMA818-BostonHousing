@@ -1,16 +1,18 @@
-numpy==2.3.2
-pandas==2.3.2
-scipy==1.16.1
-scikit-learn==1.7.1
-matplotlib==3.10.6
-streamlit==1.49.1
-nbformat==5.10.4
-nbconvert==7.16.4
-jinja2==3.1.4
+pandas==2.2.2
+numpy==1.26.4
+scikit-learn==1.4.2
+matplotlib==3.8.4
+seaborn==0.13.2
+streamlit==1.36.0
+plotly==5.22.0
 
+# fix notebook render (MathBlockParser/parse_axt_heading)
 markdown-it-py>=3.0.0
-
 mdit-py-plugins>=0.4.0
+\
+# rebuild bump 2025-09-02T23:47:32\
+\
+# rebuild bump 2025-09-02T23:51:37\
 \
 markdown-it-py==3.0.0\
 \
@@ -21,3 +23,5 @@ mistune==2.0.5
 nbconvert>=7.2
 
 nbformat>=5.9
+
+-r requirements_streamlit.txt
