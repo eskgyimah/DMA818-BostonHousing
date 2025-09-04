@@ -802,48 +802,48 @@ for _name in ("Edward_Gyimah.ipynb", "Edward_Gyimah.html"):
             mime=("application/x-ipynb+json" if _name.endswith(".ipynb") else "text/html"),
         )
 
-    # Embedded sample notebook (small, synthetic)
-    SAMPLE_NB = {
-        "cells": [
-            {
-                "cell_type": "markdown",
-                "metadata": {},
-                "source": [
-                    "# Sample Boston Housing Notebook\\n",
-                    "Quick demo: load CSV and preview head.\\n",
-                ],
-            },
-            {
-                "cell_type": "code",
-                "execution_count": None,
-                "metadata": {},
-                "outputs": [],
-                "source": [
-                    "import pandas as pd\\n",
-                    "df = pd.read_csv('BostonHousing.csv')\\n",
-                    "df.head()\\n",
-                ],
-            },
-        ],
-        "metadata": {
-            "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"}
+# Embedded sample notebook (small, synthetic)
+SAMPLE_NB = {
+    "cells": [
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "# Sample Boston Housing Notebook\\n",
+                "Quick demo: load CSV and preview head.\\n",
+            ],
         },
-        "nbformat": 4,
-        "nbformat_minor": 5,
-    }
-    sample_bytes = json.dumps(SAMPLE_NB, indent=2).encode("utf-8")
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "import pandas as pd\\n",
+                "df = pd.read_csv('BostonHousing.csv')\\n",
+                "df.head()\\n",
+            ],
+        },
+    ],
+    "metadata": {
+        "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"}
+    },
+    "nbformat": 4,
+    "nbformat_minor": 5,
+}
+sample_bytes = json.dumps(SAMPLE_NB, indent=2).encode("utf-8")
 
-    cleft, cright = st.columns(2)
-    with cleft:
-        st.download_button(
-            "📥 Download sample notebook",
-            data=sample_bytes,
-            file_name="sample_boston_notebook.ipynb",
-            key="dl-sample_boston_notebook_main",
-            mime="application/x-ipynb+json",
-        )
-    with cright:
-        render_sample = st.button("👀 Render embedded sample now", key="render-sample-nb")
+cleft, cright = st.columns(2)
+with cleft:
+    st.download_button(
+        "📥 Download sample notebook",
+        data=sample_bytes,
+        file_name="sample_boston_notebook.ipynb",
+        key="dl-sample_boston_notebook_main",
+        mime="application/x-ipynb+json",
+    )
+with cright:
+    render_sample = st.button("👀 Render embedded sample now", key="render-sample-nb")
 
     nb_file = st.file_uploader("…or upload a .ipynb to render", type=["ipynb"])
 
