@@ -246,6 +246,70 @@ with tab1:
         else:
             st.info("MEDV not found — correlation-to-target panel hidden.")
 
+    # Extra EDA visuals (matplotlib only)
+    with st.expander("📊 Extra EDA visuals", expanded=False):
+        try:
+            import numpy as np
+            import matplotlib.pyplot as plt
+            from pandas.plotting import scatter_matrix
+        except ImportError:
+            st.error("Required imports not available")
+        
+        num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        
+        if len(num_cols) > 0:
+            # 1) Correlation heatmap
+            if st.checkbox("Show correlation heatmap", key="viz-eda-corr-heatmap"):
+                corr_data = df[num_cols].corr()
+                fig, ax = plt.subplots(figsize=(10, 8))
+                im = ax.imshow(corr_data.values, cmap='coolwarm', vmin=-1, vmax=1)
+                ax.set_xticks(range(len(corr_data.columns)))
+                ax.set_xticklabels(corr_data.columns, rotation=45, ha='right')
+                ax.set_yticks(range(len(corr_data.columns)))
+                ax.set_yticklabels(corr_data.columns)
+                
+                # Add correlation values as text
+                for i in range(len(corr_data.columns)):
+                    for j in range(len(corr_data.columns)):
+                        text = ax.text(j, i, f'{corr_data.iloc[i, j]:.2f}',
+                                     ha="center", va="center", color="black")
+                
+                ax.set_title("Correlation Heatmap")
+                fig.colorbar(im, ax=ax)
+                plt.tight_layout()
+                st.pyplot(fig, use_container_width=True)
+                plt.close()
+            
+            # 2) Scatter matrix for first 6 numeric columns
+            if st.checkbox("Show scatter matrix (first 6 numeric cols)", key="viz-eda-scatter-matrix"):
+                scatter_cols = num_cols[:6]  # Limit to 6 for performance
+                if len(scatter_cols) > 1:
+                    fig = plt.figure(figsize=(12, 10))
+                    scatter_matrix(df[scatter_cols], alpha=0.6, figsize=(12, 10), diagonal='hist')
+                    plt.suptitle(f"Scatter Matrix ({len(scatter_cols)} features)")
+                    plt.tight_layout()
+                    st.pyplot(fig, use_container_width=True)
+                    plt.close()
+                else:
+                    st.info("Need at least 2 numeric columns for scatter matrix")
+            
+            # 3) MEDV histogram if exists
+            if "MEDV" in df.columns:
+                if st.checkbox("Show MEDV histogram", key="viz-eda-medv-hist"):
+                    fig, ax = plt.subplots(figsize=(8, 6))
+                    ax.hist(df["MEDV"], bins=30, alpha=0.7, color='skyblue', edgecolor='black')
+                    ax.set_title("Distribution of MEDV (Median Home Value)")
+                    ax.set_xlabel("MEDV ($1000s)")
+                    ax.set_ylabel("Frequency")
+                    ax.axvline(df["MEDV"].mean(), color='red', linestyle='--', 
+                              label=f'Mean: {df["MEDV"].mean():.1f}')
+                    ax.legend()
+                    plt.tight_layout()
+                    st.pyplot(fig, use_container_width=True)
+                    plt.close()
+        else:
+            st.info("No numeric columns found for visualization")
+
 # ====================== Regression (Linear/Ridge/Lasso) ======================
 with tab2:
     st.subheader("Regression — Predict MEDV")
@@ -627,6 +691,72 @@ with tab2:
             # Merge into global export
             st.session_state["exports"]["reg"].update(export_files)
 
+            # Regression diagnostics
+            with st.expander("🔍 Regression Diagnostics", expanded=False):
+                def _residuals_plot(y_true, y_pred, title):
+                    fig, ax = plt.subplots(figsize=(8, 6))
+                    residuals = y_true - y_pred
+                    ax.scatter(y_pred, residuals, alpha=0.6)
+                    ax.axhline(y=0, color='red', linestyle='--')
+                    ax.set_xlabel('Predicted Values')
+                    ax.set_ylabel('Residuals')
+                    ax.set_title(title)
+                    ax.grid(True, alpha=0.3)
+                    return fig
+
+                def _pred_vs_actual(y_true, y_pred, title):
+                    fig, ax = plt.subplots(figsize=(8, 6))
+                    ax.scatter(y_true, y_pred, alpha=0.6)
+                    min_val = min(y_true.min(), y_pred.min())
+                    max_val = max(y_true.max(), y_pred.max())
+                    ax.plot([min_val, max_val], [min_val, max_val], 'r--', lw=2, label='Perfect fit')
+                    ax.set_xlabel('Actual Values')
+                    ax.set_ylabel('Predicted Values')
+                    ax.set_title(title)
+                    ax.legend()
+                    ax.grid(True, alpha=0.3)
+                    return fig
+
+                def _learning_curve(est, X, y, title):
+                    from sklearn.model_selection import learning_curve
+                    train_sizes, train_scores, val_scores = learning_curve(
+                        est, X, y, cv=5, scoring='r2', train_sizes=np.linspace(0.1, 1.0, 10)
+                    )
+                    fig, ax = plt.subplots(figsize=(8, 6))
+                    ax.plot(train_sizes, np.mean(train_scores, axis=1), 'o-', label='Training R²')
+                    ax.plot(train_sizes, np.mean(val_scores, axis=1), 'o-', label='Validation R²')
+                    ax.fill_between(train_sizes, 
+                                   np.mean(train_scores, axis=1) - np.std(train_scores, axis=1),
+                                   np.mean(train_scores, axis=1) + np.std(train_scores, axis=1),
+                                   alpha=0.2)
+                    ax.fill_between(train_sizes,
+                                   np.mean(val_scores, axis=1) - np.std(val_scores, axis=1), 
+                                   np.mean(val_scores, axis=1) + np.std(val_scores, axis=1),
+                                   alpha=0.2)
+                    ax.set_xlabel('Training Set Size')
+                    ax.set_ylabel('R² Score')
+                    ax.set_title(title)
+                    ax.legend()
+                    ax.grid(True, alpha=0.3)
+                    return fig
+
+                if "ridge_model" in locals() and "y_pred" in locals():
+                    if st.checkbox("Show residuals vs fitted (Ridge)", key="viz-reg-residuals"):
+                        fig = _residuals_plot(y_test.values, y_pred, "Ridge: Residuals vs Fitted")
+                        st.pyplot(fig, use_container_width=True)
+                        plt.close()
+                    
+                    if st.checkbox("Show predicted vs actual (Ridge)", key="viz-reg-pred-actual"):
+                        fig = _pred_vs_actual(y_test.values, y_pred, "Ridge: Predicted vs Actual")
+                        st.pyplot(fig, use_container_width=True)
+                        plt.close()
+                
+                if "ridge_model" in locals() and "X" in locals() and "y" in locals():
+                    if st.checkbox("Show learning curve (Ridge)", key="viz-reg-learning"):
+                        fig = _learning_curve(ridge_model, X, y, "Ridge: Learning Curve")
+                        st.pyplot(fig, use_container_width=True)
+                        plt.close()
+
     else:
         st.warning("Columns MEDV and CAT. MEDV are required.")
 
@@ -780,6 +910,90 @@ with tab3:
 
         # Merge into global export
         st.session_state["exports"]["cls"].update(cls_export)
+
+        # Classification diagnostics
+        with st.expander("🎯 Classification Diagnostics", expanded=False):
+            try:
+                from sklearn.metrics import confusion_matrix, roc_curve, auc, precision_recall_curve, average_precision_score
+            except ImportError:
+                st.error("Required sklearn.metrics imports not available")
+                
+            if "y_test" in locals() and "y_pred" in locals():
+                y_true_cls = y_test.values
+                y_pred_cls = y_pred
+                
+                # 1) Normalized confusion matrix
+                if st.checkbox("Show confusion matrix", key="viz-cls-confusion"):
+                    cm = confusion_matrix(y_true_cls, y_pred_cls)
+                    cm_norm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+                    
+                    fig, ax = plt.subplots(figsize=(8, 6))
+                    im = ax.imshow(cm_norm, interpolation='nearest', cmap='Blues')
+                    ax.set_title('Normalized Confusion Matrix')
+                    
+                    # Add text annotations
+                    for i in range(cm.shape[0]):
+                        for j in range(cm.shape[1]):
+                            ax.text(j, i, f'{cm_norm[i, j]:.2f}\n({cm[i, j]})',
+                                   ha="center", va="center", color="black")
+                    
+                    ax.set_ylabel('True Label')
+                    ax.set_xlabel('Predicted Label')
+                    ax.set_xticks([0, 1])
+                    ax.set_xticklabels(['Low', 'High'])
+                    ax.set_yticks([0, 1])
+                    ax.set_yticklabels(['Low', 'High'])
+                    fig.colorbar(im, ax=ax)
+                    plt.tight_layout()
+                    st.pyplot(fig, use_container_width=True)
+                    plt.close()
+                
+                # 2) ROC curve with AUC
+                if "y_proba" in locals() and st.checkbox("Show ROC curve", key="viz-cls-roc"):
+                    try:
+                        y_proba_cls = y_proba[:, 1]  # Positive class probabilities
+                        fpr, tpr, _ = roc_curve(y_true_cls, y_proba_cls)
+                        roc_auc = auc(fpr, tpr)
+                        
+                        fig, ax = plt.subplots(figsize=(8, 6))
+                        ax.plot(fpr, tpr, color='darkorange', lw=2, 
+                               label=f'ROC curve (AUC = {roc_auc:.3f})')
+                        ax.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+                        ax.set_xlim([0.0, 1.0])
+                        ax.set_ylim([0.0, 1.05])
+                        ax.set_xlabel('False Positive Rate')
+                        ax.set_ylabel('True Positive Rate')
+                        ax.set_title('ROC Curve')
+                        ax.legend(loc="lower right")
+                        ax.grid(True, alpha=0.3)
+                        plt.tight_layout()
+                        st.pyplot(fig, use_container_width=True)
+                        plt.close()
+                    except Exception as e:
+                        st.warning(f"ROC curve requires probability predictions: {e}")
+                
+                # 3) Precision-Recall curve
+                if "y_proba" in locals() and st.checkbox("Show Precision-Recall curve", key="viz-cls-pr"):
+                    try:
+                        y_proba_cls = y_proba[:, 1]  # Positive class probabilities
+                        precision, recall, _ = precision_recall_curve(y_true_cls, y_proba_cls)
+                        avg_precision = average_precision_score(y_true_cls, y_proba_cls)
+                        
+                        fig, ax = plt.subplots(figsize=(8, 6))
+                        ax.plot(recall, precision, color='blue', lw=2,
+                               label=f'PR curve (AP = {avg_precision:.3f})')
+                        ax.set_xlim([0.0, 1.0])
+                        ax.set_ylim([0.0, 1.05])
+                        ax.set_xlabel('Recall')
+                        ax.set_ylabel('Precision')
+                        ax.set_title('Precision-Recall Curve')
+                        ax.legend(loc="lower left")
+                        ax.grid(True, alpha=0.3)
+                        plt.tight_layout()
+                        st.pyplot(fig, use_container_width=True)
+                        plt.close()
+                    except Exception as e:
+                        st.warning(f"PR curve requires probability predictions: {e}")
 
     else:
         st.warning("Columns MEDV and CAT. MEDV are required.")
