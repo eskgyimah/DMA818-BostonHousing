@@ -605,7 +605,7 @@ with tab2:
 
             # Export session (regression)
             st.divider()
-            if st.button("🗂️ Build export (.zip)"):
+            if st.button("🗂️ Build export (.zip)", key="zip_reg"):
                 mem = io.BytesIO()
                 stamp = time.strftime("%Y%m%d-%H%M%S")
                 with zipfile.ZipFile(mem, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
@@ -620,6 +620,7 @@ with tab2:
                     "📦 Download session (regression).zip",
                     data=mem.getvalue(),
                     file_name=f"boston_regression_session_{stamp}.zip",
+                    key="dl-25197",
                     mime="application/zip",
                 )
 
@@ -773,6 +774,7 @@ with tab3:
                 "📦 Download session (classification).zip",
                 data=mem.getvalue(),
                 file_name=f"boston_classification_session_{stamp}.zip",
+                key="dl-31844",
                 mime="application/zip",
             )
 
@@ -793,7 +795,7 @@ for _name in ("Edward_Gyimah.ipynb", "Edward_Gyimah.html"):
     _p = _p if _p.exists() else (_P(__file__).resolve().parent / "assets" / _name)
     if _p.exists():
         st.download_button(
-            f"?? Download {_name}",
+            f"📄 Download {_name}",
             data=_p.read_bytes(),
             file_name=_name,
             key=f"dl-{_name}",
@@ -841,7 +843,7 @@ for _name in ("Edward_Gyimah.ipynb", "Edward_Gyimah.html"):
             mime="application/x-ipynb+json",
         )
     with cright:
-        render_sample = st.button("👀 Render embedded sample now")
+        render_sample = st.button("👀 Render embedded sample now", key="render-sample-nb")
 
     nb_file = st.file_uploader("…or upload a .ipynb to render", type=["ipynb"])
 
@@ -871,7 +873,7 @@ for _name in ("Edward_Gyimah.ipynb", "Edward_Gyimah.html"):
 
 # ====================== Master Export (ALL) + Footer ======================
 st.divider()
-if st.button("📦 Download EVERYTHING (.zip)"):
+if st.button("📦 Download EVERYTHING (.zip)", key="zip_all"):
     mem = io.BytesIO()
     stamp = time.strftime("%Y%m%d-%H%M%S")
     with zipfile.ZipFile(mem, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
@@ -887,6 +889,7 @@ if st.button("📦 Download EVERYTHING (.zip)"):
         "⬇️ Export ALL (EDA+Regression+Classification).zip",
         data=mem.getvalue(),
         file_name=f"boston_full_session_{stamp}.zip",
+        key="dl-35816",
         mime="application/zip",
     )
 
