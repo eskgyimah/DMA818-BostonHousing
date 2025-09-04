@@ -839,7 +839,7 @@ for _name in ("Edward_Gyimah.ipynb", "Edward_Gyimah.html"):
             "📥 Download sample notebook",
             data=sample_bytes,
             file_name="sample_boston_notebook.ipynb",
-            key="dl-sample_boston_notebook.ipynb",
+            key="dl-sample_boston_notebook_main",
             mime="application/x-ipynb+json",
         )
     with cright:
